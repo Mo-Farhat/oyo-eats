@@ -1,0 +1,1 @@
+ALTER TABLE "accounts" ADD COLUMN "marketing_opt_in" boolean DEFAULT false NOT NULL;

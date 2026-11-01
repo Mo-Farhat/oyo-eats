@@ -1,0 +1,90 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1793530279773,
+      "tag": "0000_core_schema",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1793530316384,
+      "tag": "0001_rls_and_guards",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1793531099714,
+      "tag": "0002_auth",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1793531253782,
+      "tag": "0003_otp_lock",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1793532778473,
+      "tag": "0004_idempotency",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1793532852824,
+      "tag": "0005_idempotency_drop_status",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1793535814371,
+      "tag": "0006_restaurant_cuisines",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1793539252049,
+      "tag": "0007_marketing_opt_in",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1793545628953,
+      "tag": "0008_dispatch",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1793553618961,
+      "tag": "0009_rider_nic",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1793563159938,
+      "tag": "0010_order_event_seq",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1793564965465,
+      "tag": "0011_rider_pay_expense",
+      "breakpoints": true
+    }
+  ]
+}

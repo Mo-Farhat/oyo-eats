@@ -1,0 +1,51 @@
+{
+  "expo": {
+    "name": "Oyo Eats",
+    "slug": "oyo-eats",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "lk.oyoeats.app"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#18191b",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "package": "lk.oyoeats.app"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "scheme": "oyoeats",
+    "plugins": [
+      "expo-router",
+      "expo-status-bar",
+      "expo-secure-store",
+      "expo-font",
+      "expo-splash-screen",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Oyo Eats uses your location to set where your order is delivered and to show restaurants that deliver to you."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Oyo Eats uses your photos so you can upload a bank transfer slip or a photo of a problem with an order.",
+          "cameraPermission": "Oyo Eats uses the camera so you can photograph a bank transfer slip or a problem with an order.",
+          "microphonePermission": false
+        }
+      ],
+      "expo-audio"
+    ],
+    "backgroundColor": "#18191b"
+  }
+}

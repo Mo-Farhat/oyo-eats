@@ -1,0 +1,1 @@
+ALTER TABLE "riders" ADD COLUMN "nic_ciphertext" "bytea";

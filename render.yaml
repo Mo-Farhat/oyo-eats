@@ -1,0 +1,47 @@
+# Render blueprint for the API (docs/SETUP-PROVIDERS.md, step 3).
+# Secrets are marked sync: false: Render asks for them when the blueprint is first applied.
+services:
+  - type: web
+    name: oyo-eats-api
+    runtime: node
+    region: singapore
+    plan: starter # always on; the free plan sleeps, which breaks timers and alarms
+    branch: main
+    autoDeploy: true
+    # Dev dependencies are needed to build (Nest CLI, TypeScript) even with NODE_ENV=production.
+    buildCommand: npm ci --include=dev && npx turbo run build --filter=@oyo/api
+    # Runs before each deploy goes live; a failed migration stops the deploy.
+    preDeployCommand: npm run db:migrate -w @oyo/api
+    startCommand: node apps/api/dist/main.js
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_VERSION
+        value: '24'
+      - key: NODE_ENV
+        value: production
+      - key: TRUST_PROXY
+        value: '1'
+      - key: PUBLIC_URL
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: HASH_KEY
+        sync: false
+      - key: ENCRYPTION_KEY
+        sync: false
+      - key: R2_ACCOUNT_ID
+        sync: false
+      - key: R2_ACCESS_KEY_ID
+        sync: false
+      - key: R2_SECRET_ACCESS_KEY
+        sync: false
+      - key: R2_BUCKET
+        sync: false
+      - key: NOTIFYLK_USER_ID
+        sync: false
+      - key: NOTIFYLK_API_KEY
+        sync: false
+      - key: NOTIFYLK_SENDER_ID
+        sync: false
+      - key: GOOGLE_ROUTES_API_KEY
+        sync: false

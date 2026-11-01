@@ -1,0 +1,1 @@
+ALTER TABLE "otp_challenges" ADD COLUMN "locked_until" timestamp with time zone;

@@ -1,0 +1,7 @@
+dist
+.expo
+.turbo
+coverage
+package-lock.json
+docs
+apps/api/drizzle/meta

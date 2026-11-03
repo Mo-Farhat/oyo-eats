@@ -14,12 +14,19 @@ export function MenuItemForm({
   categories,
   busy,
   onSubmit,
+  title = 'Add Menu Item',
+  submitLabel = 'Add Item',
+  initialCategoryId,
 }: {
   categories: { id: string; name: string }[];
   busy: boolean;
   onSubmit: (input: MenuItemInput) => void;
+  title?: string | null;
+  submitLabel?: string;
+  initialCategoryId?: string;
 }) {
-  const [categoryId, setCategoryId] = useState(categories[0]?.id);
+  const [categoryId, setCategoryId] = useState(initialCategoryId ?? categories[0]?.id);
+  if (!categoryId && categories[0]) setCategoryId(categories[0].id);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [price, setPrice] = useState('');
@@ -61,7 +68,7 @@ export function MenuItemForm({
 
   return (
     <View style={{ gap: 12 }}>
-      <Text variant="h2">Add Menu Item</Text>
+      {title ? <Text variant="h2">{title}</Text> : null}
       <Text variant="label">Category</Text>
       <View style={styles.chips}>
         {categories.map((c) => (
@@ -120,7 +127,7 @@ export function MenuItemForm({
         ))}
       </View>
       {problem ? <Alert tone="danger" message={problem} /> : null}
-      <Button label="Add Item" loading={busy} onPress={submit} />
+      <Button label={submitLabel} loading={busy} onPress={submit} />
     </View>
   );
 }

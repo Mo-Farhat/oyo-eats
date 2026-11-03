@@ -12,8 +12,8 @@
     }
   },
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
-    "dev": "tsc -p tsconfig.build.json --watch --preserveWatchOutput",
+    "build": "node init && tsc -p tsconfig.build.json",
+    "dev": "node init && tsc -p tsconfig.build.json --watch --preserveWatchOutput",
     "lint": "eslint src",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --passWithNoTests"

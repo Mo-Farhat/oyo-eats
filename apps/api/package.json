@@ -4,9 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "nest build",
-    "dev": "nest start --watch",
-    "start": "node dist/main.js",
+    "build": "node init && nest build",
+    "dev": "node init && nest start --watch",
+    "start": "node init && node dist/main.js",
     "lint": "eslint src",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --passWithNoTests",
@@ -14,7 +14,9 @@
     "db:migrate": "drizzle-kit migrate",
     "db:studio": "drizzle-kit studio",
     "db:seed": "nest build && node dist/db/seed.js",
-    "db:backfill-ledger": "nest build && node dist/db/backfill-ledger.js"
+    "db:backfill-ledger": "nest build && node dist/db/backfill-ledger.js",
+    "demo:setup": "nest build && node dist/demo/demo-setup.js",
+    "demo:simulate": "nest build && node dist/demo/simulate.js"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1161.0",
@@ -22,7 +24,9 @@
     "@nestjs/common": "^12.3.2",
     "@nestjs/core": "^12.3.2",
     "@nestjs/platform-express": "^12.3.2",
+    "@nestjs/platform-socket.io": "^12.3.2",
     "@nestjs/throttler": "^6.7.1",
+    "@nestjs/websockets": "^12.3.2",
     "@node-rs/argon2": "^2.2.2",
     "@oyo/shared": "*",
     "drizzle-orm": "^0.45.4",
@@ -31,7 +35,8 @@
     "pg-boss": "^12.38.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2",
-    "sharp": "^0.35.5"
+    "sharp": "^0.35.5",
+    "socket.io": "^4.8.4"
   },
   "devDependencies": {
     "@nestjs/cli": "^12.0.11",
@@ -41,6 +46,7 @@
     "@types/pdfkit": "^0.17.7",
     "@types/pg": "^8.23.1",
     "drizzle-kit": "^0.31.11",
+    "socket.io-client": "^4.8.4",
     "vitest": "^5.0.5"
   }
 }

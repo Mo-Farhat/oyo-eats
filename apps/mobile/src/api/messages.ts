@@ -104,6 +104,16 @@ export function errorMessage(error: unknown): string {
       return 'Your role can’t do that. Ask the owner.';
     case 'invalid_input':
       return 'Please check what you entered.';
+    case 'refund_over_cap':
+      return b.capCents
+        ? `That's over your refund limit. Ask the owner to refund it.`
+        : 'Refunds need the owner until a dispatcher refund limit is set in Settings.';
+    case 'refund_too_large':
+      return 'That’s more than is left to refund on this order.';
+    case 'case_open':
+      return 'You’ve already sent this request. The Oyo Eats office will get back to you.';
+    case 'photo_invalid':
+      return 'Use up to 3 photos (JPG or PNG, under 10 MB each).';
     case 'idempotency_in_progress':
       return 'Still placing your order. Please wait a moment.';
     default:

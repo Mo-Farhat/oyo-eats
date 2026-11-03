@@ -1,5 +1,7 @@
 import { Body, Controller, Get, HttpCode, Inject, Module, Param, Post } from '@nestjs/common';
 import {
+  itemChangeChoiceSchema,
+  type ItemChangeChoiceInput,
   placeOrderSchema,
   quoteOrderSchema,
   type PlaceOrderInput,
@@ -19,6 +21,7 @@ import type { Routing } from '../routing/routing.js';
 import { ReviewsService } from '../reviews/reviews.service.js';
 import type { FileStorage } from '../storage/storage.js';
 import { CONFIG, DB, JOBS, ROUTING, STORAGE } from '../tokens.js';
+import { ItemChangesService } from './item-changes.service.js';
 import { OrdersService } from './orders.service.js';
 
 @Controller('orders')
@@ -26,7 +29,22 @@ export class OrdersController {
   constructor(
     @Inject(OrdersService) private readonly orders: OrdersService,
     @Inject(ReviewsService) private readonly reviews: ReviewsService,
+    @Inject(ItemChangesService) private readonly itemChanges: ItemChangesService,
   ) {}
+
+  /** C10: swap or remove an item the restaurant ran out of (RES-05). */
+  @Post(':id/item-changes/:changeId')
+  @HttpCode(200)
+  @RequirePermission('order.place')
+  async answerItemChange(
+    @CurrentAuth() auth: AuthContext,
+    @Param('id', UuidPipe) id: string,
+    @Param('changeId', UuidPipe) changeId: string,
+    @Body(new ZodPipe(itemChangeChoiceSchema)) body: ItemChangeChoiceInput,
+  ) {
+    await this.itemChanges.respond(auth, id, changeId, body.choice);
+    return this.orders.get(auth, id);
+  }
 
   @Post(':id/ratings')
   @HttpCode(204)
@@ -101,7 +119,12 @@ export class OrdersController {
       ) => new OrdersService(db, routing, jobs, config.encryptionKey, storage),
     },
     { provide: ReviewsService, inject: [DB], useFactory: (db: Db) => new ReviewsService(db) },
+    {
+      provide: ItemChangesService,
+      inject: [DB, JOBS],
+      useFactory: (db: Db, jobs: JobQueue) => new ItemChangesService(db, jobs),
+    },
   ],
-  exports: [OrdersService, ReviewsService],
+  exports: [OrdersService, ReviewsService, ItemChangesService],
 })
 export class OrdersModule {}

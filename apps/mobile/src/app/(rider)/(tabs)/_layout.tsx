@@ -8,6 +8,7 @@ import { colors } from '@/theme/tokens';
 const TABS: Omit<NavItem, 'onPress'>[] = [
   { key: 'rider', label: 'Home', icon: 'home' },
   { key: 'cash', label: 'Cash', icon: 'cash' },
+  { key: 'earnings', label: 'Earnings', icon: 'star' },
   { key: 'profile', label: 'Profile', icon: 'user' },
 ];
 

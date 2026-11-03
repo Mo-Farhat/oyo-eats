@@ -20,6 +20,8 @@ export interface BusinessSettings {
   minimumOrderCents?: number;
   /** Where customers send bank transfers. Unset: bank transfer isn't offered. */
   bankDetails?: BankDetails;
+  /** Refunds above this need the owner (ADM-16). Unset: every refund needs the owner. */
+  dispatcherRefundCapCents?: number;
 }
 
 /** Reads all settings in one query. Needs a platform-scope transaction. */
@@ -42,6 +44,7 @@ export async function loadSettings(tx: Tx): Promise<BusinessSettings> {
     timers: required<TimerSettings>('timers'),
     codLimitCents: optionalCents('codLimitCents'),
     minimumOrderCents: optionalCents('minimumOrderCents'),
+    dispatcherRefundCapCents: optionalCents('dispatcherRefundCapCents'),
     bankDetails: isBankDetails(map.get('bankDetails'))
       ? (map.get('bankDetails') as BankDetails)
       : undefined,

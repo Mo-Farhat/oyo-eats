@@ -9,10 +9,21 @@ import {
   Param,
   Patch,
   Post,
+  Put,
   Query,
 } from '@nestjs/common';
 import {
   can,
+  reportQuerySchema,
+  customerBlockSchema,
+  customerCodSchema,
+  customerFlagSchema,
+  restaurantStaffSchema,
+  reviewHiddenSchema,
+  adminSettingsSchema,
+  type AdminSettings,
+  menuReviewSchema,
+  type MenuReviewInput,
   settlementPaidSchema,
   type SettlementPaidInput,
   generateSettlementsSchema,
@@ -53,6 +64,11 @@ import { AccountsService } from './accounts.service.js';
 import { AdminOrdersService } from './orders.service.js';
 import { AdminRidersService } from './riders.service.js';
 import { SettlementsService } from './settlements.service.js';
+import { MenuApprovalsService } from './menu-approvals.service.js';
+import { SettingsAdminService } from './settings.service.js';
+import { CustomersService } from './customers.service.js';
+import { ReportsService } from './reports.service.js';
+import { setReviewHidden } from '../restaurant/insights.service.js';
 import { ApiError } from '../common/api-error.js';
 import { Idempotent } from '../common/idempotency.js';
 import { AdminRestaurantsService } from './restaurants.service.js';
@@ -347,6 +363,195 @@ export class SettlementsController {
   }
 }
 
+/** A15 menu approvals (ADM-12). Owner only. */
+@Controller('admin/menu-requests')
+export class MenuApprovalsController {
+  constructor(@Inject(MenuApprovalsService) private readonly service: MenuApprovalsService) {}
+
+  @Get()
+  @RequirePermission('menu_approvals.review')
+  list() {
+    return this.service.list();
+  }
+
+  @Post(':id/review')
+  @RequirePermission('menu_approvals.review')
+  review(
+    @CurrentAuth() auth: AuthContext,
+    @Param('id', UuidPipe) id: string,
+    @Body(new ZodPipe(menuReviewSchema)) body: MenuReviewInput,
+  ) {
+    return this.service.review(auth, id, body);
+  }
+}
+
+/** A20 settings (ADM-18). Owner only. */
+@Controller('admin/settings')
+export class SettingsController {
+  constructor(@Inject(SettingsAdminService) private readonly service: SettingsAdminService) {}
+
+  @Get()
+  @RequirePermission('settings.edit')
+  get() {
+    return this.service.get();
+  }
+
+  @Put()
+  @RequirePermission('settings.edit')
+  update(
+    @CurrentAuth() auth: AuthContext,
+    @Body(new ZodPipe(adminSettingsSchema)) body: AdminSettings,
+  ) {
+    return this.service.update(auth, body);
+  }
+}
+
+/** RES-01: a restaurant owner's own staff logins (create, reset, switch off, approve a tablet). */
+@Controller('restaurant/staff')
+export class RestaurantStaffController {
+  constructor(@Inject(AccountsService) private readonly service: AccountsService) {}
+
+  @Get()
+  @RequirePermission('restaurant.staff.manage')
+  list(@CurrentAuth() auth: AuthContext) {
+    return this.service.list(auth);
+  }
+
+  @Post()
+  @RequirePermission('restaurant.staff.manage')
+  create(
+    @CurrentAuth() auth: AuthContext,
+    @Body(new ZodPipe(restaurantStaffSchema)) body: z.infer<typeof restaurantStaffSchema>,
+  ) {
+    return this.service.create(auth, {
+      role: 'restaurant_staff',
+      ...body,
+      tenantId: auth.tenantId!,
+    });
+  }
+
+  @Post(':id/reset-password')
+  @RequirePermission('restaurant.staff.manage')
+  reset(@CurrentAuth() auth: AuthContext, @Param('id', UuidPipe) id: string) {
+    return this.service.resetPassword(auth, id);
+  }
+
+  @Post(':id/status')
+  @HttpCode(204)
+  @RequirePermission('restaurant.staff.manage')
+  async status(
+    @CurrentAuth() auth: AuthContext,
+    @Param('id', UuidPipe) id: string,
+    @Body(new ZodPipe(accountStatusSchema)) body: z.infer<typeof accountStatusSchema>,
+  ) {
+    await this.service.setActive(auth, id, body.active);
+  }
+
+  @Post('devices/:id/:decision')
+  @HttpCode(204)
+  @RequirePermission('restaurant.staff.manage')
+  async device(
+    @CurrentAuth() auth: AuthContext,
+    @Param('id', UuidPipe) id: string,
+    @Param('decision') decision: string,
+  ) {
+    if (decision !== 'approve' && decision !== 'reject') throw new ApiError('not_found');
+    await this.service.decideDevice(auth, id, decision === 'approve');
+  }
+}
+
+/** RES-12: hide an abusive review (kept on record). */
+@Controller('admin/reviews')
+export class AdminReviewsController {
+  constructor(@Inject(DB) private readonly db: Db) {}
+
+  @Post(':id/hidden')
+  @HttpCode(204)
+  @RequirePermission('support.manage')
+  async hide(
+    @CurrentAuth() auth: AuthContext,
+    @Param('id', UuidPipe) id: string,
+    @Body(new ZodPipe(reviewHiddenSchema)) body: z.infer<typeof reviewHiddenSchema>,
+  ) {
+    await setReviewHidden(this.db, auth, id, body.hidden);
+  }
+}
+
+/** A18 customers (ADM-15). Search and flag: dispatch; block: owner. */
+@Controller('admin/customers')
+export class CustomersController {
+  constructor(@Inject(CustomersService) private readonly service: CustomersService) {}
+
+  @Get()
+  @RequirePermission('customers.view')
+  search(@Query('q') q?: string) {
+    return this.service.search(typeof q === 'string' ? q.slice(0, 60) : undefined);
+  }
+
+  @Get(':id')
+  @RequirePermission('customers.view')
+  get(@Param('id', UuidPipe) id: string) {
+    return this.service.get(id);
+  }
+
+  @Post(':id/flag')
+  @RequirePermission('customers.flag')
+  flag(
+    @CurrentAuth() auth: AuthContext,
+    @Param('id', UuidPipe) id: string,
+    @Body(new ZodPipe(customerFlagSchema)) body: z.infer<typeof customerFlagSchema>,
+  ) {
+    return this.service.flag(auth, id, body.note);
+  }
+
+  @Post(':id/cod')
+  @RequirePermission('customers.flag')
+  cod(
+    @CurrentAuth() auth: AuthContext,
+    @Param('id', UuidPipe) id: string,
+    @Body(new ZodPipe(customerCodSchema)) body: z.infer<typeof customerCodSchema>,
+  ) {
+    return this.service.setCod(auth, id, body.allowed);
+  }
+
+  @Post(':id/block')
+  @RequirePermission('customers.block')
+  block(
+    @CurrentAuth() auth: AuthContext,
+    @Param('id', UuidPipe) id: string,
+    @Body(new ZodPipe(customerBlockSchema)) body: z.infer<typeof customerBlockSchema>,
+  ) {
+    return this.service.setBlocked(auth, id, body.blocked, body.reason);
+  }
+}
+
+/** A19 reports (ADM-17) and the audit log (SEC-31). Owner only. */
+@Controller('admin')
+export class ReportsController {
+  constructor(@Inject(ReportsService) private readonly service: ReportsService) {}
+
+  @Get('reports')
+  @RequirePermission('reports.view')
+  report(@Query(new ZodPipe(reportQuerySchema)) q: z.infer<typeof reportQuerySchema>) {
+    return this.service.report(q.from, q.to);
+  }
+
+  @Get('reports/csv')
+  @Header('content-type', 'text/csv; charset=utf-8')
+  @RequirePermission('reports.view')
+  csv(@Query(new ZodPipe(reportQuerySchema)) q: z.infer<typeof reportQuerySchema>) {
+    return this.service.csv(q.from, q.to);
+  }
+
+  @Get('audit')
+  @RequirePermission('audit_log.view')
+  audit(@Query('action') action?: string) {
+    return this.service.audit(
+      typeof action === 'string' && /^[a-z_.]{1,40}$/.test(action) ? action : undefined,
+    );
+  }
+}
+
 @Module({
   imports: [OrdersModule],
   controllers: [
@@ -355,6 +560,12 @@ export class SettlementsController {
     AdminOrdersController,
     AdminRidersController,
     SettlementsController,
+    MenuApprovalsController,
+    SettingsController,
+    RestaurantStaffController,
+    AdminReviewsController,
+    CustomersController,
+    ReportsController,
   ],
   providers: [
     {
@@ -366,6 +577,27 @@ export class SettlementsController {
       provide: AdminRestaurantsService,
       inject: [DB, CONFIG],
       useFactory: (db: Db, config: Config) => new AdminRestaurantsService(db, config.encryptionKey),
+    },
+    {
+      provide: ReportsService,
+      inject: [DB],
+      useFactory: (db: Db) => new ReportsService(db),
+    },
+    {
+      provide: CustomersService,
+      inject: [DB, CONFIG],
+      useFactory: (db: Db, config: Config) =>
+        new CustomersService(db, { hashKey: config.hashKey, encryptionKey: config.encryptionKey }),
+    },
+    {
+      provide: SettingsAdminService,
+      inject: [DB],
+      useFactory: (db: Db) => new SettingsAdminService(db),
+    },
+    {
+      provide: MenuApprovalsService,
+      inject: [DB],
+      useFactory: (db: Db) => new MenuApprovalsService(db),
     },
     {
       provide: SettlementsService,
@@ -384,5 +616,6 @@ export class SettlementsController {
         new AdminOrdersService(db, config.encryptionKey, orders),
     },
   ],
+  exports: [SettlementsService],
 })
 export class AdminModule {}

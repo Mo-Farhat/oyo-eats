@@ -111,7 +111,9 @@ export class SlipsService {
         .from(bankSlips)
         .innerJoin(orders, eq(orders.id, bankSlips.orderId))
         .innerJoin(restaurants, eq(restaurants.id, orders.tenantId))
-        .where(eq(bankSlips.status, 'pending'))
+        // Only orders still waiting for payment: a slip on an order the customer cancelled is a
+        // refund case now, not something to approve.
+        .where(and(eq(bankSlips.status, 'pending'), eq(orders.status, 'awaiting_payment')))
         .orderBy(asc(bankSlips.uploadedAt));
       return Promise.all(
         rows.map(async ({ slip, order, restaurantName }) => ({

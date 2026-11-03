@@ -19,6 +19,8 @@ export interface Config {
   notifyLk?: { userId: string; apiKey: string; senderId: string };
   /** Google Routes API key; without it distances are straight-line x 1.3. */
   googleRoutesKey?: string;
+  /** Send push through Expo (on in production, or with EXPO_PUSH=on); otherwise pushes are logged. */
+  expoPush?: { accessToken?: string };
 }
 
 /** All of a group of variables, or none (half-configured is an error). */
@@ -72,6 +74,10 @@ export function loadConfig(): Config {
       senderId: 'NOTIFYLK_SENDER_ID',
     }),
     googleRoutesKey: process.env.GOOGLE_ROUTES_API_KEY || undefined,
+    expoPush:
+      env === 'production' || process.env.EXPO_PUSH === 'on'
+        ? { accessToken: process.env.EXPO_ACCESS_TOKEN || undefined }
+        : undefined,
   };
   if (config.env === 'production') {
     const missing = [

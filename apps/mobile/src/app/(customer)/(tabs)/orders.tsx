@@ -4,6 +4,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { errorMessage } from '@/api/messages';
 import { Alert, Button, Card, Chip, Screen, Text } from '@/components';
 import { useOrders } from '@/customer/queries';
+import { InboxBell } from '@/customer/InboxBell';
 import { exitText, stageText } from '@/customer/stage';
 import { useOrderActions } from '@/customer/useOrderActions';
 
@@ -106,9 +107,12 @@ export default function Orders() {
   const past = list.filter((o) => !active.includes(o));
   return (
     <Screen inTabs bodyStyle={{ gap: 12, paddingTop: 24 }}>
-      <Text variant="h1" accessibilityRole="header">
-        Your Orders
-      </Text>
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+        <Text variant="h1" accessibilityRole="header">
+          Your Orders
+        </Text>
+        <InboxBell />
+      </View>
       {orders.error ? <Alert tone="danger" message={errorMessage(orders.error)} /> : null}
       {orders.data && list.length === 0 ? (
         <Text variant="muted">No orders yet. Your first one will show here.</Text>

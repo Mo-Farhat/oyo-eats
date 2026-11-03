@@ -1,9 +1,11 @@
 import { createHash } from 'node:crypto';
-import type {
-  BankDetails,
-  GenerateSettlementsInput,
-  SettlementDetail,
-  SettlementSummary,
+import {
+  REFUND_REASON_LABELS,
+  type RefundReason,
+  type BankDetails,
+  type GenerateSettlementsInput,
+  type SettlementDetail,
+  type SettlementSummary,
 } from '@oyo/shared';
 import { and, asc, desc, eq, inArray, notExists, sql } from 'drizzle-orm';
 import type { AuthContext } from '../auth/auth.service.js';
@@ -15,6 +17,7 @@ import {
   auditLog,
   offers,
   orders,
+  refunds,
   restaurants,
   settlementLines,
   settlements,
@@ -143,8 +146,45 @@ export class SettlementsService {
     };
   }
 
-  /** Delivered orders in the period not on any earlier statement for this kind of party. */
+  /**
+   * Delivered orders in the period not on any earlier statement for this kind of party, plus
+   * refunds charged to that party and not yet netted off (PRD section 9: "net of refunds").
+   */
   private async unsettled(tx: Tx, party: Party, start: Date, end: Date) {
+    const [orderLines, refundLines] = await Promise.all([
+      this.unsettledOrders(tx, party, start, end),
+      this.unsettledRefunds(tx, party, end),
+    ]);
+    return [...orderLines.map((l) => ({ ...l, refundId: null as string | null })), ...refundLines];
+  }
+
+  private async unsettledRefunds(tx: Tx, party: Party, end: Date) {
+    const rows = await tx.execute<{
+      id: string;
+      party_id: string;
+      reference: string;
+      amount_cents: number;
+      reason_code: string;
+    }>(sql`
+      select r.id, ${party === 'restaurant' ? sql`r.tenant_id` : sql`r.rider_id`} as party_id,
+             o.reference, r.amount_cents, r.reason_code
+      from ${refunds} r join ${orders} o on o.id = r.order_id
+      where r.attribution = ${party} and o.status = 'delivered' and not r.order_adjusted
+        and r.created_at < ${end.toISOString()}
+        and not exists (
+          select 1 from ${settlementLines} l join ${settlements} s on s.id = l.settlement_id
+          where l.refund_id = r.id and s.party = ${party})`);
+    return rows.rows.map((r) => ({
+      orderId: null as string | null,
+      refundId: r.id,
+      reference: r.reference,
+      partyId: r.party_id,
+      amountCents: -Number(r.amount_cents),
+      description: `Refund #${r.reference} (${REFUND_REASON_LABELS[r.reason_code as RefundReason] ?? r.reason_code})`,
+    }));
+  }
+
+  private async unsettledOrders(tx: Tx, party: Party, start: Date, end: Date) {
     const covered = tx
       .select({ one: sql`1` })
       .from(settlementLines)
@@ -246,6 +286,8 @@ export class SettlementsService {
           );
         // Already reviewed or paid for this start date: late deliveries wait for the next period.
         if (existing) continue;
+        // Refunds outweigh what's due: nothing to pay; it all carries into the next period.
+        if (ls.reduce((n, l) => n + l.amountCents, 0) <= 0) continue;
         const [s] = await tx
           .insert(settlements)
           .values({
@@ -262,6 +304,7 @@ export class SettlementsService {
             settlementId: s!.id,
             tenantId: input.party === 'restaurant' ? partyId : null,
             orderId: l.orderId,
+            refundId: l.refundId,
             description: l.description,
             amountCents: l.amountCents,
           })),

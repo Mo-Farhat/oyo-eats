@@ -5,9 +5,9 @@ import { restaurantApi } from '@/api';
 
 export const BOARD = ['restaurant-board'] as const;
 
-/** The kitchen board, refreshed every 5 s (live socket updates replace polling later). */
+/** The kitchen board: live updates refresh it at once; polling every 10 s is the fallback. */
 export function useBoard() {
-  return useQuery({ queryKey: BOARD, queryFn: restaurantApi.board, refetchInterval: 5_000 });
+  return useQuery({ queryKey: BOARD, queryFn: restaurantApi.board, refetchInterval: 10_000 });
 }
 
 export function useBoardOrder(id: string): RestaurantOrder | undefined {
@@ -23,3 +23,12 @@ export const useSeenOrders = create<{ seen: Set<string>; markSeen(id: string): v
     markSeen: (id) => set({ seen: new Set([...get().seen, id]) }),
   }),
 );
+
+export const MENU = ['restaurant-menu'] as const;
+export const MENU_REQUESTS = ['restaurant-menu-requests'] as const;
+export const HOURS = ['restaurant-hours'] as const;
+
+/** The restaurant's own menu, live and waiting items (T07). */
+export function useMenu() {
+  return useQuery({ queryKey: MENU, queryFn: restaurantApi.menu, refetchInterval: 30_000 });
+}

@@ -13,6 +13,7 @@ import { RecordingJobQueue } from '../jobs/queue.js';
 import { AuthService } from '../auth/auth.service.js';
 import { base32Decode, timeStep, totpAt } from '../auth/totp.js';
 import { accounts } from '../db/schema.js';
+import type { PushSender } from '../notifications/push.js';
 import type { FileStorage } from '../storage/storage.js';
 import { eq } from 'drizzle-orm';
 import type { Role } from '@oyo/shared';
@@ -69,8 +70,9 @@ export interface Harness {
 export async function withHarness(
   tx: Tx,
   work: (h: Harness) => Promise<void>,
-  imports: Type[] = [],
+  options: Type[] | { imports?: Type[]; push?: PushSender } = [],
 ) {
+  const { imports = [], push } = Array.isArray(options) ? { imports: options } : options;
   const sms = new Map<string, string>();
   const jobs = new RecordingJobQueue();
   const storage = new MemoryStorage();
@@ -82,6 +84,7 @@ export async function withHarness(
       sms: { send: async (phone, text) => void sms.set(phone, text) },
       storage,
       imports,
+      push: push ?? { send: async (m) => m.map(() => ({ ok: true })) },
     }),
     // TEST_LOG=1 prints server errors behind a 500.
     { logger: process.env.TEST_LOG ? ['error'] : false, abortOnError: false },

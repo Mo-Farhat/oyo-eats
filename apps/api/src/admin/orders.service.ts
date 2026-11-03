@@ -8,6 +8,7 @@ import { accounts, offers, orderEvents, orders, supportCases } from '../db/schem
 import { applyOrderEvent, stateOf } from '../orders/order-events.js';
 import type { OrdersService } from '../orders/orders.service.js';
 import { latestSlip } from '../payments/bank-transfer.js';
+import { orderRefundableCents } from '../support/support.service.js';
 
 const ROLE_NAME: Record<string, string> = {
   customer: 'Customer',
@@ -78,16 +79,21 @@ export class AdminOrdersService {
               ? `${who} (${ROLE_NAME[e.actorRole] ?? e.actorRole})`
               : (ROLE_NAME[e.actorRole] ?? e.actorRole),
             note:
-              typeof p.reason === 'string'
-                ? p.reason
-                : typeof p.prepMinutes === 'number'
-                  ? `${p.prepMinutes} min prep`
-                  : null,
+              e.type === 'item_unavailable'
+                ? `${String(p.name)}${p.substitute ? `, offered ${String(p.substitute)}` : ''}`
+                : e.type === 'item_change_resolved'
+                  ? `${String(p.name)}: ${p.choice === 'substitute' ? `swapped for ${String(p.substitute)}` : 'removed'}${p.by === 'timeout' ? ' (no answer)' : ''}`
+                  : typeof p.reason === 'string'
+                    ? p.reason
+                    : typeof p.prepMinutes === 'number'
+                      ? `${p.prepMinutes} min prep`
+                      : null,
           };
         }),
         offers: offerRows.map((o) => ({ ...o, sentAt: o.sentAt.toISOString() })),
         canAdminCancel: can('cancelled_by_admin'),
         canMarkFailed: can('delivery_failed'),
+        refundableCents: await orderRefundableCents(tx, order),
       };
     });
   }

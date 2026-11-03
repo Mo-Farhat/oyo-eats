@@ -2,6 +2,7 @@ import {
   colomboParts,
   type AcceptOrderInput,
   type DelayOrderInput,
+  type ItemChange,
   type RejectOrderInput,
   type RestaurantBoard,
   type RestaurantOrder,
@@ -21,12 +22,13 @@ import {
   riders,
   supportCases,
 } from '../db/schema.js';
+import { hasPendingItemChange, itemChangesFor } from '../orders/item-changes.service.js';
 import { applyOrderEvent, type OrderRow } from '../orders/order-events.js';
 import { latestSlip } from '../payments/bank-transfer.js';
 import { loadSettings } from '../settings/settings.js';
 
 /** Far-future pause: "closed until reopened" from the board's Open switch (RES-10). */
-const CLOSED_UNTIL_REOPENED = new Date('2100-01-01T00:00:00Z');
+export const CLOSED_UNTIL_REOPENED = new Date('2100-01-01T00:00:00Z');
 
 /** Midnight in Asia/Colombo (UTC+5:30, no DST) for "today" on the Done tab. */
 function startOfColomboDay(now: Date): Date {
@@ -69,7 +71,7 @@ export class RestaurantOrdersService {
         )
         .orderBy(asc(orders.placedAt));
       const ids = rows.map((o) => o.id);
-      const [items, events] = ids.length
+      const [items, events, changes] = ids.length
         ? await Promise.all([
             tx.select().from(orderItems).where(inArray(orderItems.orderId, ids)),
             tx
@@ -88,9 +90,10 @@ export class RestaurantOrdersService {
                 ),
               )
               .orderBy(asc(orderEvents.occurredAt), asc(orderEvents.seq)),
+            itemChangesFor(tx, ids),
           ])
-        : [[], []];
-      return { restaurant, rows, items, events };
+        : [[], [], new Map<string, ItemChange[]>()];
+      return { restaurant, rows, items, events, changes };
     });
 
     const extra = await withScope(this.db, PLATFORM, async (tx) => {
@@ -145,6 +148,7 @@ export class RestaurantOrdersService {
         paymentMethod: o.paymentMethod,
         paid: o.paymentMethod !== 'cod',
         lines: lines.map((l) => ({
+          id: l.id,
           menuItemId: l.menuItemId,
           name: l.name,
           quantity: l.quantity,
@@ -169,6 +173,7 @@ export class RestaurantOrdersService {
             : null,
         readyAt: readyAt?.toISOString() ?? null,
         rider: rider ? { name: rider.name, vehicle: rider.vehicle, plate: rider.plate } : null,
+        itemChanges: own.changes.get(o.id) ?? [],
       };
     };
 
@@ -237,6 +242,8 @@ export class RestaurantOrdersService {
   /** Mark ready (RES-06): dispatch and the rider see it on their next refresh. */
   ready(auth: AuthContext, orderId: string): Promise<void> {
     return withScope(this.db, scopeFor(auth), async (tx) => {
+      // The customer is still choosing what replaces an unavailable item (RES-05).
+      if (await hasPendingItemChange(tx, orderId)) throw new ApiError('item_change_pending');
       await applyOrderEvent(tx, orderId, 'marked_ready', this.actor(auth));
     });
   }
@@ -266,11 +273,17 @@ export class RestaurantOrdersService {
   }
 
   /** The board's Open switch: off pauses new orders until switched back on (RES-10). */
-  setOpen(auth: AuthContext, open: boolean): Promise<void> {
+  /** Open switch and pause (RES-10): closed until reopened, or for 15, 30 or 60 minutes. */
+  setOpen(auth: AuthContext, open: boolean, minutes?: number): Promise<void> {
     return withScope(this.db, scopeFor(auth), async (tx) => {
+      const until = open
+        ? null
+        : minutes
+          ? new Date(Date.now() + minutes * 60_000)
+          : CLOSED_UNTIL_REOPENED;
       await tx
         .update(restaurants)
-        .set({ pausedUntil: open ? null : CLOSED_UNTIL_REOPENED })
+        .set({ pausedUntil: until })
         .where(eq(restaurants.id, auth.tenantId!));
     });
   }

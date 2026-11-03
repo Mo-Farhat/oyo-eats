@@ -18,7 +18,8 @@
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "lk.oyoeats.app"
+      "package": "lk.oyoeats.app",
+      "googleServicesFile": "./google-services.json"
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -44,8 +45,25 @@
           "microphonePermission": false
         }
       ],
-      "expo-audio"
+      "expo-audio",
+      [
+        "expo-notifications",
+        {
+          "color": "#648402"
+        }
+      ]
     ],
-    "backgroundColor": "#18191b"
+    "backgroundColor": "#18191b",
+    "extra": {
+      "router": {
+        "asyncRoutes": {
+          "web": true
+        }
+      },
+      "eas": {
+        "projectId": "4dad9857-2711-46a3-a2c5-7deef523e273"
+      }
+    },
+    "owner": "oyoeats"
   }
 }

@@ -46,6 +46,7 @@ import { renderReceipt } from './receipt.js';
 import { loadSettings, type BusinessSettings } from '../settings/settings.js';
 import { bankTransferInfo, latestSlip } from '../payments/bank-transfer.js';
 import { canRate, ratingsFor, rateUntil } from '../reviews/ratings.js';
+import { itemChangesFor } from './item-changes.service.js';
 import { applyOrderEvent, stateOf, type OrderRow } from './order-events.js';
 import { ORDER_QUEUES } from './queues.js';
 
@@ -209,6 +210,7 @@ export class OrdersService {
           .orderBy(asc(orderEvents.occurredAt), asc(orderEvents.seq)),
       ]);
       const ratings = (await ratingsFor(tx, [order.id])).get(order.id)!;
+      const changes = (await itemChangesFor(tx, [order.id])).get(order.id)!;
       const [rider] = order.riderId
         ? await tx
             .select({
@@ -276,6 +278,7 @@ export class OrdersService {
             ? new Date(accepted.occurredAt.getTime() + order.prepMinutes * 60_000).toISOString()
             : null;
         })(),
+        itemChanges: changes,
       };
     });
   }
@@ -570,13 +573,18 @@ export class OrdersService {
       throw new ApiError('minimum_order', { minimumCents: settings.minimumOrderCents });
     }
 
-    // COD is hidden above the limit (CUS-08). Flagged customers lose COD with ADM-15 (Milestone 4).
+    // COD is hidden above the limit (CUS-08) and for customers the office took it from (ADM-15).
     // Bank transfer needs the business account to be set (docs/NEEDS-YOU.md).
+    const [customer] = await tx
+      .select({ codBlocked: accounts.codBlocked })
+      .from(accounts)
+      .where(eq(accounts.id, customerId));
     const paymentMethods = ENABLED_METHODS.filter(
       (m) =>
         (m !== 'cod' ||
-          settings.codLimitCents === undefined ||
-          totals.totalCents <= settings.codLimitCents) &&
+          (!customer?.codBlocked &&
+            (settings.codLimitCents === undefined ||
+              totals.totalCents <= settings.codLimitCents))) &&
         (m !== 'bank_transfer' || settings.bankDetails !== undefined),
     );
 

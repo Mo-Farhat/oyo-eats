@@ -16,6 +16,8 @@ import {
   Text,
 } from '@/components';
 import { BankTransferPanel } from '@/customer/BankTransferPanel';
+import { ItemChanges } from '@/customer/ItemChanges';
+import { OrderSupport } from '@/customer/OrderSupport';
 import { RiderAssignedPopup, RiderCard } from '@/customer/RiderCard';
 import { keys, useOrder } from '@/customer/queries';
 import { exitText, STAGE_LABELS, stageText } from '@/customer/stage';
@@ -88,6 +90,7 @@ export default function OrderScreen() {
           ) : null}
           {o.rider?.phone ? <RiderCard rider={o.rider} /> : null}
           <RiderAssignedPopup order={o} />
+          <ItemChanges order={o} />
           {exit ? (
             <Alert
               tone="danger"
@@ -182,6 +185,7 @@ export default function OrderScreen() {
             <Button variant="secondary" label="Cancel Order" onPress={() => setConfirming(true)} />
           ) : null}
           {cancel.error ? <Alert tone="danger" message={errorMessage(cancel.error)} /> : null}
+          <OrderSupport order={o} />
           <ConfirmSheet
             visible={confirming}
             title="Cancel This Order?"

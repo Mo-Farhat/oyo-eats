@@ -9,8 +9,14 @@ import { DbModule } from './db/db.module.js';
 import { DispatchModule } from './dispatch/dispatch.module.js';
 import { HealthController } from './health.controller.js';
 import { JobsModule } from './jobs/jobs.module.js';
+import { LiveModule } from './live/live.module.js';
+import { NotificationsModule } from './notifications/notifications.module.js';
+import type { PushSender } from './notifications/push.js';
 import type { RecordingJobQueue } from './jobs/queue.js';
 import { OrdersModule } from './orders/orders.module.js';
+import { PayoutsModule } from './payouts/payouts.module.js';
+import { SupportModule } from './support/support.module.js';
+import { ReconciliationModule } from './reconciliation/reconciliation.module.js';
 import { PaymentsModule } from './payments/payments.module.js';
 import { ProfileModule } from './profile/profile.module.js';
 import { RestaurantModule } from './restaurant/restaurant.module.js';
@@ -35,6 +41,10 @@ export interface AppOptions {
   sms?: SmsSender;
   /** Private file storage. Defaults to local disk under config.uploadDir. */
   storage?: FileStorage;
+  /** Listen for live-update notices from Postgres. Off when jobs are off (tests). */
+  live?: boolean;
+  /** Push sender. Defaults to Expo when configured, else the console. */
+  push?: PushSender;
   /** Extra modules, for test-only controllers. */
   imports?: Type[];
 }
@@ -57,6 +67,11 @@ export class AppModule {
         RestaurantModule,
         DispatchModule,
         AdminModule,
+        PayoutsModule,
+        SupportModule,
+        ReconciliationModule,
+        LiveModule.forRoot(options.live ?? options.jobs !== false),
+        NotificationsModule.forRoot(options.jobs !== false, options.push),
         StorageModule,
         ...(options.imports ?? []),
       ],

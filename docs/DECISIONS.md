@@ -123,6 +123,11 @@ Taken from the design canvas (`project/ds/oyo-eats/tokens.json`):
 - **Office line**: 072 878 7872. Customers see the assigned rider's phone from acceptance until the order closes (`canSeeRiderContact`).
 - **Business bank account** for bank transfers: Commercial Bank, Nawalapitiya, "Oyo Eats", 1000857557.
 
+## Decided 2026-11-03
+
+- **Unavailable items (RES-05)**: the kitchen marks part of a preparing line unavailable and may offer a plain substitute (no required choices). The customer swaps or removes it within `timers.itemChangeSeconds` (3 min); no answer removes it; no substitute removes it at once; nothing left cancels the order (`cancelled_items_unavailable`, system). Ready is held while an answer is pending. The order's totals change in place: cash orders collect the new total; prepaid orders get a `refunds` row (`item_unavailable`, attribution restaurant, `order_adjusted`) on a `refund_bank_transfer` case. `order_adjusted` refunds are not netted off the restaurant's statement, because the lower food total already pays them less. A prepaid substitute can't cost more than what it replaces. What a prepaid customer paid is `payments.amount_cents`, not the (possibly lowered) order total.
+- **Push**: Expo push (Apple's service on iPhone, Firebase Cloud Messaging on Android, free plan, no card). Firebase project `oyoeatsapp`, separate from the Maps Google Cloud project.
+
 ## Open decisions
 
 | # | Decision | Default until decided |

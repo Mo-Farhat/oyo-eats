@@ -188,6 +188,10 @@ export const accounts = pgTable(
     termsAcceptedAt: at(), // customers: privacy notice, terms and 18+ confirmation (PRI-03, PRI-12)
     marketingOptIn: boolean().notNull().default(false), // offers and news only (NOT-03)
     createdAt: createdAt(),
+    /** ADM-15: an office note on a customer (fake orders, abuse); visible to dispatch. */
+    flagNote: text(),
+    /** ADM-15: this customer can't pay cash on delivery. */
+    codBlocked: boolean().notNull().default(false),
     deactivatedAt: at(),
   },
   (t) => [
@@ -545,6 +549,49 @@ export const orderItems = pgTable(
   (t) => [index().on(t.orderId), check('quantity_positive', sql`${t.quantity} > 0`)],
 );
 
+/**
+ * RES-05: part of a line the kitchen can't make. Snapshots the line, since resolving it changes or
+ * deletes the order line; the order totals are updated in place when it is resolved.
+ */
+export const orderItemChanges = pgTable(
+  'order_item_changes',
+  {
+    id: id(),
+    tenantId: tenantId(),
+    orderId: uuid()
+      .notNull()
+      .references(() => orders.id),
+    orderItemId: uuid(), // no FK: the line may be deleted when resolved
+    name: text().notNull(),
+    quantity: smallint().notNull(),
+    availableQuantity: smallint().notNull(),
+    missingCents: cents().notNull(),
+    substituteMenuItemId: uuid().references(() => menuItems.id),
+    substituteName: text(),
+    substituteUnitPriceCents: cents(),
+    status: text().notNull().default('pending'), // pending | substituted | removed
+    resolvedBy: text(), // customer | timeout | kitchen
+    respondBy: timestamp({ withTimezone: true }).notNull(),
+    refundId: uuid().references(() => refunds.id),
+    createdBy: uuid()
+      .notNull()
+      .references(() => accounts.id),
+    createdAt: createdAt(),
+    resolvedAt: at(),
+  },
+  (t) => [
+    index().on(t.orderId),
+    check(
+      'available_less_than_ordered',
+      sql`${t.availableQuantity} >= 0 and ${t.availableQuantity} < ${t.quantity}`,
+    ),
+    check(
+      'substitute_complete',
+      sql`(${t.substituteMenuItemId} is null) = (${t.substituteUnitPriceCents} is null)`,
+    ),
+  ],
+);
+
 /** Append-only. The order timeline is rebuilt from these rows. */
 export const orderEvents = pgTable(
   'order_events',
@@ -752,6 +799,8 @@ export const settlementLines = pgTable(
       .references(() => settlements.id),
     tenantId: uuid().references(() => restaurants.id),
     orderId: uuid().references(() => orders.id),
+    /** A refund netted off this statement (PRD section 9). */
+    refundId: uuid().references((): AnyPgColumn => refunds.id),
     description: text().notNull(),
     amountCents: cents().notNull(),
   },
@@ -810,6 +859,8 @@ export const supportCases = pgTable(
     status: supportStatusEnum().notNull().default('open'),
     assigneeId: uuid().references(() => accounts.id),
     resolution: text(),
+    /** Where a rider was when they reported it (RID-14 emergency). */
+    location: point(),
     createdAt: createdAt(),
     resolvedAt: at(),
   },
@@ -838,4 +889,122 @@ export const auditLog = pgTable(
     index().on(t.actorAccountId, t.occurredAt),
     index().on(t.targetType, t.targetId),
   ],
+);
+
+// Notifications (section 10): one row per recipient, which is both the in-app notification list
+// (NOT-06, 30 days) and the push outbox. Order events are expanded into rows by the sender once
+// committed; notification_runs records which events are done.
+
+export const notifications = pgTable(
+  'notifications',
+  {
+    id: id(),
+    accountId: uuid()
+      .notNull()
+      .references(() => accounts.id),
+    kind: text().notNull(), // the event type, e.g. offer_sent
+    title: text().notNull(),
+    body: text().notNull(),
+    data: jsonb()
+      .notNull()
+      .default(sql`'{}'::jsonb`), // { orderId } for opening the right screen
+    critical: boolean().notNull().default(false), // NOT-01: tracked, SMS fallback later
+    pushStatus: text().notNull().default('pending'), // pending | sent | no_device | failed
+    pushAttempts: smallint().notNull().default(0),
+    pushError: text(),
+    sentAt: at(),
+    readAt: at(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index().on(t.accountId, t.createdAt),
+    index()
+      .on(t.createdAt)
+      .where(sql`${t.pushStatus} = 'pending'`),
+  ],
+);
+
+export const notificationRuns = pgTable('notification_runs', {
+  eventId: uuid()
+    .primaryKey()
+    .references(() => orderEvents.id),
+  processedAt: createdAt(),
+});
+
+/** Expo push tokens, one per installed app (a person may have a phone and a tablet). */
+export const pushTokens = pgTable(
+  'push_tokens',
+  {
+    id: id(),
+    accountId: uuid()
+      .notNull()
+      .references(() => accounts.id),
+    token: text().notNull(),
+    platform: text(),
+    deviceId: text(),
+    createdAt: createdAt(),
+    lastSeenAt: at(),
+  },
+  (t) => [uniqueIndex().on(t.token), index().on(t.accountId)],
+);
+
+/**
+ * Refunds (ADM-16): owed to the customer when issued, paid when the office transfers it. The
+ * attribution says whose statement it comes off (restaurant, rider) or that Oyo Eats absorbs it.
+ */
+export const refunds = pgTable(
+  'refunds',
+  {
+    id: id(),
+    orderId: uuid()
+      .notNull()
+      .references(() => orders.id),
+    tenantId: uuid()
+      .notNull()
+      .references(() => restaurants.id),
+    caseId: uuid().references(() => supportCases.id),
+    customerId: uuid()
+      .notNull()
+      .references(() => accounts.id),
+    riderId: uuid().references(() => accounts.id),
+    amountCents: cents().notNull(),
+    reasonCode: text().notNull(),
+    attribution: text().notNull(), // restaurant | rider | oyo
+    note: text(),
+    status: text().notNull().default('owed'), // owed | paid
+    issuedBy: uuid()
+      .notNull()
+      .references(() => accounts.id),
+    paidBy: uuid().references(() => accounts.id),
+    paidReference: text(),
+    /**
+     * The order total was lowered instead (an unavailable item, RES-05): the restaurant's share
+     * already shrank, so the refund isn't netted off its statement again.
+     */
+    orderAdjusted: boolean().notNull().default(false),
+    createdAt: createdAt(),
+    paidAt: at(),
+  },
+  (t) => [
+    index().on(t.orderId),
+    index().on(t.status),
+    check('refund_positive', sql`${t.amountCents} > 0`),
+    check('rider_refund_has_rider', sql`${t.attribution} <> 'rider' or ${t.riderId} is not null`),
+  ],
+);
+
+/** PRD section 9, control 2: the nightly check that operations and the ledger agree. */
+export const reconciliationRuns = pgTable(
+  'reconciliation_runs',
+  {
+    id: id(),
+    forDate: date().notNull(),
+    ok: boolean().notNull(),
+    issues: jsonb()
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    triggeredBy: uuid().references(() => accounts.id), // null: the nightly job
+    createdAt: createdAt(),
+  },
+  (t) => [index().on(t.createdAt)],
 );

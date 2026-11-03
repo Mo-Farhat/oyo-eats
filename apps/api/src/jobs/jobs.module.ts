@@ -24,6 +24,7 @@ import { RecordingJobQueue, type JobQueue } from './queue.js';
 export class PgBossJobs implements JobQueue, OnApplicationBootstrap, OnApplicationShutdown {
   private readonly logger = new Logger('Jobs');
   private readonly handlers = new Map<string, (data: object) => Promise<void>>();
+  private readonly crons = new Map<string, string>([['maintenance', '17 * * * *']]);
   readonly boss: PgBoss;
 
   constructor(
@@ -41,6 +42,10 @@ export class PgBossJobs implements JobQueue, OnApplicationBootstrap, OnApplicati
     this.handlers.set(queue, handler as (data: object) => Promise<void>);
   }
 
+  schedule(queue: string, cron: string): void {
+    this.crons.set(queue, cron);
+  }
+
   async sendAfter(queue: string, data: object, seconds: number): Promise<void> {
     await this.boss.sendAfter(queue, data, { retryLimit: 3 }, seconds);
   }
@@ -53,7 +58,8 @@ export class PgBossJobs implements JobQueue, OnApplicationBootstrap, OnApplicati
         for (const job of jobs) await handler(job.data);
       });
     }
-    await this.boss.schedule('maintenance', '17 * * * *', null, { tz: 'Asia/Colombo' });
+    for (const [queue, cron] of this.crons)
+      await this.boss.schedule(queue, cron, null, { tz: 'Asia/Colombo' });
     this.logger.log(`pg-boss started: ${[...this.handlers.keys()].join(', ')}`);
   }
 

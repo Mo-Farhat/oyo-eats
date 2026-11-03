@@ -63,6 +63,10 @@ const EXPECTED: Record<OrderEvent, Expected[]> = {
     ...activeKeys,
     'picked_up|ready|assigned',
   ].map((from) => ({ from, to: `cancelled|${from.split('|').slice(1).join('|')}` })),
+  cancelled_items_unavailable: DELIVERY.map((d) => ({
+    from: `active|preparing|${d}`,
+    to: `cancelled|preparing|${d}`,
+  })),
   delivery_failed: [{ from: 'picked_up|ready|assigned', to: 'failed|ready|assigned' }],
 };
 
@@ -84,6 +88,7 @@ const EXPECTED_ACTORS: Record<OrderEvent, Actor[]> = {
   delivered: ['rider'],
   cancelled_by_customer: ['customer'],
   cancelled_by_admin: ADMIN,
+  cancelled_items_unavailable: ['system'],
   delivery_failed: ADMIN,
 };
 

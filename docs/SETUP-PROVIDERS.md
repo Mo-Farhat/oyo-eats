@@ -95,6 +95,7 @@ The repo has a `render.yaml` blueprint with the build, migration and health-chec
 | `R2_*` | from step 2b |
 | `NOTIFYLK_*` | from step 1d |
 | `GOOGLE_ROUTES_API_KEY` | from step 5 (optional at first) |
+| `EXPO_ACCESS_TOKEN` | optional: expo.dev → Account settings → Access tokens, with "Enhanced push security" turned on for the project. Push is on automatically in production. |
 
 4. Deploy. The pre-deploy step runs the database migrations; the health check is `/health`.
 5. **Custom domain**: in the service's Settings → Custom Domains, add `api.oyoeats.lk`. Render shows a CNAME target. In Cloudflare DNS add a **CNAME** `api` → that target, with the proxy **off** (grey cloud) so Render can issue the certificate.
@@ -120,8 +121,8 @@ The API refuses to start in production if R2, the SMS provider or `PUBLIC_URL` i
 
 ### 5c. Firebase for Android push
 
-1. At console.firebase.google.com, **add Firebase** to the same Google Cloud project.
-2. Add an **Android app** with package `lk.oyoeats.app`; download `google-services.json` and send it to me as a file (it isn't secret like a key, but keep it out of chat logs if you can; put it in `apps/mobile/`).
+1. At console.firebase.google.com, create a **separate** project (done: `oyoeatsapp`), Analytics off. The free Spark plan covers push and needs no card; keeping it apart from the Maps project keeps it off billing.
+2. Add an **Android app** with package `lk.oyoeats.app`; download `google-services.json` into `apps/mobile/` (done; it's committed, since EAS builds need it and it isn't a secret).
 3. Project settings → Service accounts → **Generate new private key** (FCM v1). This JSON is secret: you'll upload it to EAS yourself (step 6).
 
 ---

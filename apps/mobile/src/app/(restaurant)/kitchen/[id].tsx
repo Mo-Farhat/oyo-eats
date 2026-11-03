@@ -19,6 +19,7 @@ import {
 } from '@/components';
 import { mmss, useCountdown } from '@/hooks/useCountdown';
 import { BOARD, useBoardOrder } from '@/restaurant/queries';
+import { UnavailableSheet } from '@/restaurant/UnavailableSheet';
 import { colors, fonts } from '@/theme/tokens';
 
 const time = (iso: string) =>
@@ -35,7 +36,47 @@ const REASONS: { value: RejectReason; label: string }[] = [
   { value: 'other', label: 'Other' },
 ];
 
-function Items({ o, checkable }: { o: RestaurantOrder; checkable?: boolean }) {
+/** RES-05: what happened to items the kitchen couldn't make; a pending one holds Ready. */
+function Changes({ o }: { o: RestaurantOrder }) {
+  const pending = o.itemChanges.find((c) => c.status === 'pending');
+  const left = useCountdown(pending?.respondBy);
+  return (
+    <>
+      {o.itemChanges.map((c) => {
+        const missing = c.quantity - c.availableQuantity;
+        if (c.status === 'pending')
+          return (
+            <Alert
+              key={c.id}
+              tone="warn"
+              message={`Waiting for ${o.customerFirstName}: ${missing} × ${c.substitute?.name} or remove ${c.name} · ${mmss(left)}`}
+            />
+          );
+        const what =
+          c.status === 'substituted' && c.substitute
+            ? `Make ${missing} × ${c.substitute.name} instead of ${c.name}`
+            : `Leave out ${missing} × ${c.name}`;
+        const who =
+          c.resolvedBy === 'timeout'
+            ? ' (no answer)'
+            : c.resolvedBy === 'customer'
+              ? ` (${o.customerFirstName} chose)`
+              : '';
+        return <Alert key={c.id} tone="info" message={`${what}${who}.`} />;
+      })}
+    </>
+  );
+}
+
+function Items({
+  o,
+  checkable,
+  onUnavailable,
+}: {
+  o: RestaurantOrder;
+  checkable?: boolean;
+  onUnavailable?: (line: RestaurantOrder['lines'][number]) => void;
+}) {
   const [done, setDone] = useState<Set<number>>(new Set());
   return (
     <Card style={{ gap: 0, paddingVertical: 4 }}>
@@ -50,7 +91,7 @@ function Items({ o, checkable }: { o: RestaurantOrder; checkable?: boolean }) {
           </View>
         );
         return (
-          <View key={i} style={styles.line}>
+          <View key={l.id} style={styles.line}>
             {checkable ? (
               <Checkbox
                 label={l.name}
@@ -68,6 +109,16 @@ function Items({ o, checkable }: { o: RestaurantOrder; checkable?: boolean }) {
               text
             )}
             {checkable ? null : <Text>{formatLkr(l.lineTotalCents)}</Text>}
+            {onUnavailable &&
+            !o.itemChanges.some((c) => c.status === 'pending' && c.orderItemId === l.id) ? (
+              <Button
+                small
+                variant="ghost"
+                label="Can't Make"
+                accessibilityLabel={`Can't make ${l.name}`}
+                onPress={() => onUnavailable(l)}
+              />
+            ) : null}
           </View>
         );
       })}
@@ -119,6 +170,7 @@ export default function KitchenOrder() {
   const [rejecting, setRejecting] = useState(false);
   const [reason, setReason] = useState<RejectReason>('item_unavailable');
   const [soldOut, setSoldOut] = useState<Set<string>>(new Set());
+  const [cantMake, setCantMake] = useState<RestaurantOrder['lines'][number] | null>(null);
   const respond = useCountdown(o?.respondBy);
   const readyLeft = useCountdown(o?.readyBy);
 
@@ -236,7 +288,8 @@ export default function KitchenOrder() {
             <Text variant="big">{readyLeft > 0 ? mmss(readyLeft) : 'Late'}</Text>
             <Text variant="small">{readyLeft > 0 ? 'minutes left' : 'Past the promised time'}</Text>
           </Card>
-          <Items o={o} checkable />
+          <Changes o={o} />
+          <Items o={o} checkable onUnavailable={setCantMake} />
           <RiderCard o={o} />
           <Text variant="label">Running late?</Text>
           <View style={styles.row}>
@@ -255,7 +308,17 @@ export default function KitchenOrder() {
           </View>
           <Text variant="small">Adding delay updates the customer's time and alerts dispatch.</Text>
           {error ? <Alert tone="danger" message={errorMessage(error)} /> : null}
-          <Button label="Mark Ready" loading={ready.isPending} onPress={() => ready.mutate()} />
+          <Button
+            label={
+              o.itemChanges.some((c) => c.status === 'pending')
+                ? 'Waiting for the Customer'
+                : 'Mark Ready'
+            }
+            disabled={o.itemChanges.some((c) => c.status === 'pending')}
+            loading={ready.isPending}
+            onPress={() => ready.mutate()}
+          />
+          <UnavailableSheet order={o} line={cantMake} onClose={() => setCantMake(null)} />
         </>
       ) : null}
 
@@ -277,6 +340,7 @@ export default function KitchenOrder() {
 
       {stage === 'done' ? (
         <>
+          <Changes o={o} />
           <Items o={o} />
           <Chip
             label={

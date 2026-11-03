@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "2090280056",
+    "project_id": "oyoeatsapp",
+    "storage_bucket": "oyoeatsapp.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:2090280056:android:7e78900ea40a678cfe798d",
+        "android_client_info": {
+          "package_name": "lk.oyoeats.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCUCCSwxgVgCR0x_hWu5oZICc-yDKZiT6Q"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -45,3 +45,5 @@ services:
         sync: false
       - key: GOOGLE_ROUTES_API_KEY
         sync: false
+      - key: EXPO_ACCESS_TOKEN
+        sync: false

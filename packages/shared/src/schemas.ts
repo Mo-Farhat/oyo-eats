@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ITEM_CHANGE_CHOICES } from './item-changes.js';
 import { PAYMENT_METHODS } from './order-state.js';
 
 /** Mobile prefixes in use in Sri Lanka: 070-072 and 074-078. */
@@ -213,8 +214,26 @@ export const rejectOrderSchema = z.strictObject({
 export const delayOrderSchema = z.strictObject({ minutes: z.int().min(1).max(30) });
 
 /** The board's Open switch: closed means paused until reopened (RES-10). */
-export const storeStatusSchema = z.strictObject({ open: z.boolean() });
+export const storeStatusSchema = z.strictObject({
+  open: z.boolean(),
+  /** Pause for this long (RES-10); without it, closed until reopened. */
+  minutes: z.union([z.literal(15), z.literal(30), z.literal(60)]).optional(),
+});
 
+/** RES-05: part or all of a line can't be made; optionally offer a substitute from the menu. */
+export const markItemUnavailableSchema = z.strictObject({
+  orderItemId: z.uuid(),
+  /** How many of the line the kitchen can still make. */
+  availableQuantity: z.int().min(0).max(99).default(0),
+  substituteMenuItemId: z.uuid().optional(),
+  /** Also mark the item sold out on the menu. */
+  markSoldOut: z.boolean().default(false),
+});
+
+export const itemChangeChoiceSchema = z.strictObject({ choice: z.enum(ITEM_CHANGE_CHOICES) });
+
+export type MarkItemUnavailableInput = z.infer<typeof markItemUnavailableSchema>;
+export type ItemChangeChoiceInput = z.infer<typeof itemChangeChoiceSchema>;
 export type AcceptOrderInput = z.infer<typeof acceptOrderSchema>;
 export type RejectOrderInput = z.infer<typeof rejectOrderSchema>;
 export type DelayOrderInput = z.infer<typeof delayOrderSchema>;
@@ -392,3 +411,187 @@ export const settlementPaidSchema = z.strictObject({
   reference: z.string().trim().max(80).optional(),
 });
 export type SettlementPaidInput = z.infer<typeof settlementPaidSchema>;
+
+// Restaurant menu management (T07-T10, RES-08 to RES-10) and approvals (A15, ADM-12)
+
+export const itemStockSchema = z.strictObject({ soldOut: z.boolean() });
+
+/** A change to a live item; goes live once Oyo Eats approves it. */
+export const menuEditRequestSchema = z
+  .strictObject({
+    name: z.string().trim().min(1).max(80).optional(),
+    description: z.string().trim().max(300).optional(),
+    priceCents: z.int().min(100).max(10_000_000).optional(),
+    categoryId: z.uuid().optional(),
+  })
+  .refine((v) => Object.values(v).some((x) => x !== undefined), 'Change at least one thing');
+
+export const restaurantCategorySchema = z.strictObject({
+  name: z.string().trim().min(1).max(40),
+});
+
+/** A special closure or special hours on one date (holiday, Poya day). */
+export const hoursOverrideSchema = z
+  .strictObject({
+    date: z.iso.date(),
+    closed: z.boolean(),
+    opensAt: z
+      .string()
+      .regex(/^([01]\d|2[0-3]):[0-5]\d$/)
+      .optional(),
+    closesAt: z
+      .string()
+      .regex(/^([01]\d|2[0-3]):[0-5]\d$/)
+      .optional(),
+  })
+  .refine(
+    (v) => v.closed || (v.opensAt && v.closesAt),
+    'Give the special hours, or mark it closed',
+  );
+
+export const menuReviewSchema = z
+  .strictObject({
+    approve: z.boolean(),
+    /** Required when rejecting; the restaurant sees it. */
+    note: z.string().trim().min(3).max(300).optional(),
+  })
+  .refine((v) => v.approve || v.note, 'Say why it was rejected');
+
+export type MenuEditRequestInput = z.infer<typeof menuEditRequestSchema>;
+export type HoursOverrideInput = z.infer<typeof hoursOverrideSchema>;
+export type MenuReviewInput = z.infer<typeof menuReviewSchema>;
+export type StoreStatusInput = z.infer<typeof storeStatusSchema>;
+
+/** An Expo push token from expo-notifications. */
+export const pushTokenSchema = z.strictObject({
+  token: z.string().regex(/^Expo(nent)?PushToken\[[\w-]+\]$/, 'Not an Expo push token'),
+  platform: z.enum(['ios', 'android']).optional(),
+});
+export type PushTokenInput = z.infer<typeof pushTokenSchema>;
+
+/** A20 / ADM-18: everything the owner can change without a release. Applies to new orders. */
+export const adminSettingsSchema = z.strictObject({
+  deliveryFee: z.strictObject({
+    baseFeeCents: z.int().min(0).max(200_000),
+    perKmCents: z.int().min(0).max(50_000),
+    maxRadiusMeters: z.int().min(1_000).max(30_000),
+  }),
+  timers: z.strictObject({
+    restaurantResponseSeconds: z.int().min(60).max(1_800),
+    slipWindowSeconds: z.int().min(300).max(7_200),
+    offerSeconds: z.int().min(15).max(300),
+    unassignedAlertSeconds: z.int().min(60).max(3_600),
+    itemChangeSeconds: z.int().min(60).max(900),
+  }),
+  riderCaps: z.strictObject({
+    maxActiveJobs: z.int().min(1).max(5),
+    cashCapCents: z.int().min(100_000).max(10_000_000),
+  }),
+  riderPay: z.strictObject({ platformShareBps: z.int().min(0).max(5_000) }),
+  /** Null: no minimum / no limit / dispatchers can't refund without the owner. */
+  minimumOrderCents: z.int().min(0).max(10_000_000).nullable(),
+  codLimitCents: z.int().min(0).max(50_000_000).nullable(),
+  dispatcherRefundCapCents: z.int().min(0).max(10_000_000).nullable(),
+  bankDetails: z
+    .strictObject({
+      bankName: z.string().trim().min(2).max(60),
+      branch: z.string().trim().min(2).max(60),
+      accountName: z.string().trim().min(2).max(80),
+      accountNumber: z.string().trim().min(4).max(30),
+    })
+    .nullable(),
+});
+export type AdminSettings = z.infer<typeof adminSettingsSchema>;
+
+// Support and refunds (CUS-14, CUS-19, RID-13, ADM-16)
+
+export const cancelRequestSchema = z.strictObject({
+  reason: z.string().trim().min(3).max(300),
+});
+
+/** Multipart fields with the problem report; photos come as files named "photos". */
+export const problemReportSchema = z.strictObject({
+  type: z.enum(['missing_item', 'wrong_item', 'cold_food', 'late', 'rider_issue', 'other']),
+  description: z.string().trim().min(3).max(1000),
+});
+
+export const riderIssueSchema = z.strictObject({
+  type: z.enum([
+    'customer_unreachable',
+    'restaurant_closed',
+    'wrong_address',
+    'vehicle_problem',
+    'accident',
+    'emergency',
+  ]),
+  description: z.string().trim().max(500).optional(),
+  lat: z.number().min(-90).max(90).optional(),
+  lng: z.number().min(-180).max(180).optional(),
+});
+
+export const refundSchema = z.strictObject({
+  amountCents: z.int().min(100).max(100_000_000),
+  reasonCode: z.enum([
+    'missing_item',
+    'wrong_item',
+    'cold_food',
+    'late_delivery',
+    'cancelled_after_accept',
+    'cancelled_paid_transfer',
+    'goodwill',
+  ]),
+  attribution: z.enum(['restaurant', 'rider', 'oyo']),
+  note: z.string().trim().max(300).optional(),
+});
+
+export const resolveCaseSchema = z.strictObject({
+  resolution: z.string().trim().min(3).max(500),
+});
+
+export const refundPaidSchema = z.strictObject({
+  reference: z.string().trim().max(80).optional(),
+});
+
+export type CancelRequestInput = z.infer<typeof cancelRequestSchema>;
+export type ProblemReportInput = z.infer<typeof problemReportSchema>;
+export type RiderIssueInput = z.infer<typeof riderIssueSchema>;
+export type RefundInput = z.infer<typeof refundSchema>;
+
+export const reviewReplySchema = z.strictObject({ reply: z.string().trim().min(2).max(500) });
+
+/** YYYY-MM-DD, inclusive, Asia/Colombo; at most 31 days. */
+export const historyQuerySchema = z.strictObject({
+  from: z.iso.date(),
+  to: z.iso.date(),
+});
+
+/** RES-01: a restaurant owner adding a kitchen login for their own restaurant. */
+export const restaurantStaffSchema = z.strictObject({
+  displayName: z.string().trim().min(2).max(60),
+  username: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .regex(/^[a-z0-9._-]{3,32}$/)
+    .optional(),
+  phone: sriLankanMobileSchema.optional(),
+});
+export const reviewHiddenSchema = z.strictObject({ hidden: z.boolean() });
+
+export const customerFlagSchema = z.strictObject({
+  note: z.string().trim().min(3).max(300).nullable(),
+});
+export const customerCodSchema = z.strictObject({ allowed: z.boolean() });
+export const customerBlockSchema = z.strictObject({
+  blocked: z.boolean(),
+  reason: z.string().trim().min(3).max(300).optional(),
+});
+
+/** Inclusive, Asia/Colombo; at most 92 days. */
+export const reportQuerySchema = z.strictObject({ from: z.iso.date(), to: z.iso.date() });
+
+/** RID-14: who to tell if the rider presses Emergency. */
+export const emergencyContactSchema = z.strictObject({
+  name: z.string().trim().min(2).max(60),
+  phone: sriLankanMobileSchema,
+});

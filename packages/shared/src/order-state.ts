@@ -67,6 +67,7 @@ export const ORDER_EVENTS = [
   'delivered',
   'cancelled_by_customer',
   'cancelled_by_admin',
+  'cancelled_items_unavailable',
   'delivery_failed',
 ] as const;
 export type OrderEvent = (typeof ORDER_EVENTS)[number];
@@ -174,6 +175,12 @@ const RULES: Record<OrderEvent, Rule> = {
   cancelled_by_admin: {
     actors: ADMIN,
     from: (s) => !TERMINAL_STATUSES.includes(s.status),
+    to: (s) => ({ ...s, status: 'cancelled' }),
+  },
+  // RES-05: every item turned out unavailable and the customer's answer left nothing to cook.
+  cancelled_items_unavailable: {
+    actors: ['system'],
+    from: (s) => isActive(s) && s.kitchen === 'preparing',
     to: (s) => ({ ...s, status: 'cancelled' }),
   },
   // Delivery failed or no-show at the door.

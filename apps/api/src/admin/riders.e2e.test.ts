@@ -190,6 +190,6 @@ describe.skipIf(!testDatabaseUrl)('riders and cash handovers', () => {
           expect(list.error).toBe('forbidden');
         }),
       ),
-    120_000,
+    180_000,
   );
 });

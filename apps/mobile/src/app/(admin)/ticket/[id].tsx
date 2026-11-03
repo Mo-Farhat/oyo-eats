@@ -1,11 +1,13 @@
-import type { AdminOrderDetail } from '@oyo/shared';
+import type { AdminOrderDetail, RefundInput } from '@oyo/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
+import * as Crypto from 'expo-crypto';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { dispatchApi } from '@/api';
 import { errorMessage } from '@/api/messages';
 import { DISPATCH_BOARD } from '@/admin/queries';
+import { RefundForm } from '@/admin/RefundForm';
 import { call, localPhone } from '@/call';
 import {
   Alert,
@@ -30,8 +32,11 @@ const EVENT: Record<string, string> = {
   restaurant_accepted: 'Restaurant accepted',
   restaurant_rejected: 'Restaurant rejected',
   restaurant_timed_out: 'Restaurant didn’t respond',
-  delay_reported: 'Restaurant running late',
-  food_ready: 'Food ready',
+  prep_delayed: 'Restaurant running late',
+  marked_ready: 'Food ready',
+  item_unavailable: 'Item unavailable',
+  item_change_resolved: 'Item change settled',
+  cancelled_items_unavailable: 'Cancelled: nothing left to make',
   offer_sent: 'Offered to a rider',
   offer_accepted: 'Rider accepted',
   offer_declined: 'Rider declined',
@@ -100,6 +105,16 @@ export default function Ticket() {
   });
   const [action, setAction] = useState<'cancel' | 'failed' | null>(null);
   const [reason, setReason] = useState('');
+  const [refunding, setRefunding] = useState(false);
+  const refundKey = useMemo(() => Crypto.randomUUID(), [refunding]);
+  const refund = useMutation({
+    mutationFn: (input: RefundInput) => dispatchApi.refundOrder(id, input, refundKey),
+    onSuccess: (c) => {
+      setRefunding(false);
+      void queryClient.invalidateQueries({ queryKey: key });
+      router.push(`/case/${c.id}`);
+    },
+  });
   const act = useMutation({
     mutationFn: () =>
       action === 'cancel'
@@ -220,6 +235,9 @@ export default function Ticket() {
             />
           </Card>
 
+          {o.refundableCents > 0 ? (
+            <Button variant="secondary" label="Refund" onPress={() => setRefunding(true)} />
+          ) : null}
           {o.canMarkFailed ? (
             <Button
               variant="secondary"
@@ -265,6 +283,19 @@ export default function Ticket() {
         </View>
         <TextField label="Reason" value={reason} onChangeText={setReason} />
         {act.error ? <Alert tone="danger" message={errorMessage(act.error)} /> : null}
+      </Sheet>
+      <Sheet visible={refunding} onClose={() => setRefunding(false)} tall>
+        <Text variant="h2">Refund</Text>
+        {refund.error ? <Alert tone="danger" message={errorMessage(refund.error)} /> : null}
+        {o ? (
+          <RefundForm
+            refundableCents={o.refundableCents}
+            hasRider={!!o.rider}
+            busy={refund.isPending}
+            defaultReason="goodwill"
+            onSubmit={(input) => refund.mutate(input)}
+          />
+        ) : null}
       </Sheet>
     </Screen>
   );

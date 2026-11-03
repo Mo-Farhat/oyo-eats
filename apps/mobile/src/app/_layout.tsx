@@ -16,6 +16,8 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { faceFor, useSession } from '@/auth/session';
+import { LiveUpdates } from '@/live/LiveUpdates';
+import { PushSetup } from '@/push/PushSetup';
 import { colors } from '@/theme/tokens';
 
 SplashScreen.preventAutoHideAsync();
@@ -54,6 +56,8 @@ export default function RootLayout() {
     <QueryClientProvider client={queryClient}>
       <SafeAreaProvider>
         <StatusBar style="light" />
+        {face ? <LiveUpdates key={session!.account.id} /> : null}
+        {face ? <PushSetup key={`push-${session!.account.id}`} face={face} /> : null}
         <Stack
           screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.page } }}
         >

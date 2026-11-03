@@ -26,6 +26,8 @@ export interface TimerSettings {
   slipWindowSeconds: number;
   offerSeconds: number;
   unassignedAlertSeconds: number;
+  /** How long a customer has to answer an unavailable item before it is removed (RES-05). */
+  itemChangeSeconds: number;
 }
 
 export const SETTINGS_SEED_DEFAULTS = {
@@ -38,6 +40,7 @@ export const SETTINGS_SEED_DEFAULTS = {
     slipWindowSeconds: 30 * 60,
     offerSeconds: 60,
     unassignedAlertSeconds: 5 * 60,
+    itemChangeSeconds: 3 * 60,
   },
 } as const satisfies {
   deliveryFee: DeliveryFeeSettings;

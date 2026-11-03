@@ -24,3 +24,4 @@ export { Stepper } from './Stepper';
 export { Stars } from './Stars';
 export { Toggle } from './Toggle';
 export { SwipeButton } from './SwipeButton';
+export { LinkRow } from './LinkRow';

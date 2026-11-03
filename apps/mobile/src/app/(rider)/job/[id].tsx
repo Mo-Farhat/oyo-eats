@@ -16,6 +16,7 @@ import {
   Text,
   TextField,
 } from '@/components';
+import { IssueSheet } from '@/rider/IssueSheet';
 import { RIDER_STATE, useRiderState } from '@/rider/queries';
 import { colors, fonts } from '@/theme/tokens';
 
@@ -30,6 +31,7 @@ export default function Job() {
   const job = state.data?.jobs.find((j) => j.orderId === id);
   const [cash, setCash] = useState('');
   const [reason, setReason] = useState('');
+  const [issue, setIssue] = useState(false);
   const refresh = () => queryClient.invalidateQueries({ queryKey: RIDER_STATE });
 
   useEffect(() => {
@@ -85,6 +87,7 @@ export default function Job() {
             </Text>
             <Text variant="small">{`#${job.reference} · ${job.itemCount} ${job.itemCount === 1 ? 'item' : 'items'} · earn ${formatLkr(job.payoutCents)}`}</Text>
           </View>
+          <IconButton icon="alert" label="Report an issue" onPress={() => setIssue(true)} />
         </>
       }
       bodyStyle={{ gap: 14 }}
@@ -182,6 +185,7 @@ export default function Job() {
           />
         </>
       )}
+      <IssueSheet orderId={job.orderId} visible={issue} onClose={() => setIssue(false)} />
     </Screen>
   );
 }

@@ -4,9 +4,13 @@ import { adminApi, dispatchApi } from '@/api';
 
 export const DISPATCH_BOARD = ['dispatch-board'] as const;
 
-/** The dispatch board, refreshed every 5 s (Socket.IO replaces polling later). */
+/** The dispatch board: live updates refresh it at once; polling every 10 s is the fallback. */
 export function useDispatchBoard() {
-  return useQuery({ queryKey: DISPATCH_BOARD, queryFn: dispatchApi.board, refetchInterval: 5_000 });
+  return useQuery({
+    queryKey: DISPATCH_BOARD,
+    queryFn: dispatchApi.board,
+    refetchInterval: 10_000,
+  });
 }
 
 export const ADMIN_ACCOUNTS = ['admin-accounts'] as const;
@@ -34,3 +38,5 @@ export const SLIPS = ['slips'] as const;
 
 export const ADMIN_RIDERS = ['admin-riders'] as const;
 export const adminRiderKey = (id: string) => ['admin-rider', id] as const;
+
+export const MENU_APPROVALS = ['menu-approvals'] as const;

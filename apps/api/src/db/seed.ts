@@ -135,6 +135,80 @@ const DEMO_RESTAURANTS: DemoRestaurant[] = [
         { name: 'Fish Bun', priceCents: 15_000 },
         { name: 'Chicken Roll', priceCents: 22_000 },
         { name: 'Vegetable Roti', priceCents: 18_000, dietaryTags: ['vegetarian'] },
+        { name: 'Egg Roll', priceCents: 20_000 },
+        { name: 'Patty (Chicken)', priceCents: 16_000 },
+      ],
+      Sweets: [
+        { name: 'Butter Cake Slice', priceCents: 12_000, dietaryTags: ['vegetarian'] },
+        { name: 'Kimbula Bun', priceCents: 10_000, dietaryTags: ['vegetarian'] },
+      ],
+      Drinks: [{ name: 'Plain Tea', priceCents: 6_000, dietaryTags: ['vegan'] }],
+    },
+  },
+  {
+    name: 'Kandy Road Biryani',
+    addressText: '22 Kandy Road, Nawalapitiya',
+    lng: 80.5412,
+    lat: 7.0478,
+    cuisines: ['Biryani', 'Rice'],
+    menu: {
+      Biryani: [
+        {
+          name: 'Chicken Biryani',
+          description: 'Basmati, chicken, boiled egg, raita',
+          priceCents: 120_000,
+          groups: [
+            {
+              name: 'Size',
+              min: 1,
+              max: 1,
+              options: [
+                ['Regular', 0],
+                ['Large', 40_000],
+              ],
+            },
+          ],
+        },
+        {
+          name: 'Mutton Biryani',
+          priceCents: 160_000,
+          groups: [
+            {
+              name: 'Size',
+              min: 1,
+              max: 1,
+              options: [
+                ['Regular', 0],
+                ['Large', 50_000],
+              ],
+            },
+          ],
+        },
+        { name: 'Egg Biryani', priceCents: 85_000, dietaryTags: ['vegetarian'] },
+      ],
+      Desserts: [{ name: 'Faluda', priceCents: 45_000, dietaryTags: ['vegetarian'] }],
+    },
+  },
+  {
+    name: 'Green Leaf Vegetarian',
+    addressText: '5 Gampola Road, Nawalapitiya',
+    lng: 80.5368,
+    lat: 7.0505,
+    cuisines: ['Vegetarian', 'Rice & Curry'],
+    menu: {
+      Mains: [
+        { name: 'Vegetable Rice & Curry', priceCents: 70_000, dietaryTags: ['vegetarian'] },
+        { name: 'Masala Dosa', priceCents: 55_000, dietaryTags: ['vegetarian'] },
+        {
+          name: 'Vegetable Kottu',
+          priceCents: 75_000,
+          dietaryTags: ['vegetarian'],
+          groups: [SPICE],
+        },
+      ],
+      Juices: [
+        { name: 'Wood Apple Juice', priceCents: 30_000, dietaryTags: ['vegan'] },
+        { name: 'Papaya Juice', priceCents: 30_000, dietaryTags: ['vegan'] },
       ],
     },
   },

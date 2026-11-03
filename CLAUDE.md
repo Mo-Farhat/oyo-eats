@@ -32,6 +32,8 @@ npm test -w @oyo/shared -- -t "6000 m costs"         # tests matching a name
 npm run db:generate -w @oyo/api                      # SQL migration from src/db/schema.ts changes
 npm run db:migrate -w @oyo/api                       # apply migrations to DATABASE_URL
 npm run db:seed -w @oyo/api                          # settings, owner, demo data (re-runnable)
+npm run demo:setup -w @oyo/api                       # rehearsal logins in apps/api/.demo/ (dev only)
+npm run demo:simulate -w @oyo/api -- --you kitchen   # orders + autopilot for the other roles (docs/REHEARSAL.md)
 ```
 
 - Mobile (`apps/mobile`):
@@ -72,6 +74,8 @@ npm run db:seed -w @oyo/api                          # settings, owner, demo dat
 - HTTP tests use `withHarness()` and `fixtureRestaurant()` from `src/testing/harness.ts` (captured SMS, recorded jobs, always-open restaurant far from the seed data).
 - Money movements post to the ledger with `post()` helpers in `src/ledger/ledger.ts`, inside the same transaction as the event that causes them (positive = debit). Settlements read orders and `settlement_lines`; each order is settled once per party.
 - Money-moving endpoints get `@Idempotent()` (`common/idempotency.ts`): it requires an `Idempotency-Key` header, replays retries, and releases the key if the handler throws. So a handler must not commit a money movement and then throw.
+- Live updates: triggers on `order_events` and `menu_change_requests` send `pg_notify('oyo_live', ids only)` on commit (`drizzle/0012_live_notify.sql`). `LiveListener` (one LISTEN connection, direct Neon host) feeds `LiveGateway` (Socket.IO `/live`, token in the handshake, rooms from `live/rooms.ts`) and `LiveBus`. The app's `LiveUpdates` refetches query keys on `changed`; add new keys to `keysFor()` when a screen should update live.
+- Notifications: `order_events` is the outbox. `NotificationsService` claims events via `notification_runs` (ON CONFLICT DO NOTHING; `order_events` can't be row-locked), writes one `notifications` row per person from `orderNotifications()` in `@oyo/shared`, then pushes pending rows (Expo when `config.expoPush`, else logged). Tests call `runOnce()` and pass `{ push }` to `withHarness`.
 - Background work goes through pg-boss in `jobs/jobs.module.ts` (`QUEUES`, workers, schedules). Tests build the app with `jobs: false`.
 - HTTP tests: `AppModule.forRoot(testConfig(), { db: tx, jobs: false, imports: [...] })` inside `inRollback` (see `access.e2e.test.ts`). Requests share the one transaction, so send them one at a time.
 - Tests share the dev database with seeded demo data: filter assertions to your own fixtures rather than counting whole tables.

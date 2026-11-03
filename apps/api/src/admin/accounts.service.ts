@@ -30,7 +30,20 @@ const RULES: Partial<Record<Role, { create: Permission; manage: Permission }>> =
   dispatcher: { create: 'accounts.create_dispatcher', manage: 'staff.manage' },
 };
 
-function allowed(auth: AuthContext, role: Role, action: 'create' | 'manage') {
+/** A restaurant owner managing their own kitchen staff (RES-01). */
+const ownStaff = (auth: AuthContext, role: Role, tenantId: string | null) =>
+  can(auth.role, 'restaurant.staff.manage') &&
+  role === 'restaurant_staff' &&
+  !!auth.tenantId &&
+  tenantId === auth.tenantId;
+
+function allowed(
+  auth: AuthContext,
+  role: Role,
+  action: 'create' | 'manage',
+  tenantId: string | null = null,
+) {
+  if (ownStaff(auth, role, tenantId)) return;
   const rule = RULES[role];
   if (!rule || !can(auth.role, rule[action])) throw new ApiError('forbidden');
 }
@@ -81,7 +94,7 @@ export class AccountsService {
   }
 
   async create(auth: AuthContext, input: CreateAccountInput): Promise<CreatedAccount> {
-    allowed(auth, input.role, 'create');
+    allowed(auth, input.role, 'create', 'tenantId' in input ? input.tenantId : null);
     const password = temporaryPassword();
     const passwordHash = await hashPassword(password);
     return withScope(this.db, PLATFORM, async (tx) => {
@@ -148,7 +161,7 @@ export class AccountsService {
   private async target(tx: Tx, auth: AuthContext, id: string) {
     const [a] = await tx.select().from(accounts).where(eq(accounts.id, id)).for('update');
     if (!a || a.role === 'customer' || a.role === 'owner') throw new ApiError('not_found');
-    allowed(auth, a.role, 'manage');
+    allowed(auth, a.role, 'manage', a.tenantId);
     return a;
   }
 
@@ -225,7 +238,13 @@ export async function listAccounts(
   auth: AuthContext,
   filter: { role?: Role; tenantId?: string },
 ): Promise<StaffAccount[]> {
-  const manageable = (Object.keys(RULES) as Role[]).filter((r) => can(auth.role, RULES[r]!.manage));
+  // A restaurant owner sees only their own restaurant's logins.
+  if (can(auth.role, 'restaurant.staff.manage') && auth.tenantId) {
+    filter = { tenantId: auth.tenantId };
+  }
+  const manageable = can(auth.role, 'restaurant.staff.manage')
+    ? (['restaurant_owner', 'restaurant_staff'] as Role[])
+    : (Object.keys(RULES) as Role[]).filter((r) => can(auth.role, RULES[r]!.manage));
   if (!manageable.length) return [];
   const rows = await tx
     .select()

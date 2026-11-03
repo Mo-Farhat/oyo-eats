@@ -84,7 +84,7 @@ export default function Board() {
   const [tab, setTab] = useState<Tab>('new');
   const b = board.data;
   const setOpen = useMutation({
-    mutationFn: restaurantApi.setOpen,
+    mutationFn: (open: boolean) => restaurantApi.setOpen(open),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: BOARD }),
   });
 

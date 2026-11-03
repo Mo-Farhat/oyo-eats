@@ -2,10 +2,12 @@ import { Body, Controller, Get, HttpCode, Inject, Module, Param, Post } from '@n
 import {
   acceptOrderSchema,
   delayOrderSchema,
+  markItemUnavailableSchema,
   rejectOrderSchema,
   storeStatusSchema,
   type AcceptOrderInput,
   type DelayOrderInput,
+  type MarkItemUnavailableInput,
   type RejectOrderInput,
 } from '@oyo/shared';
 import type { z } from 'zod';
@@ -14,12 +16,32 @@ import { CurrentAuth, RequirePermission } from '../auth/decorators.js';
 import { UuidPipe } from '../common/uuid.pipe.js';
 import { ZodPipe } from '../common/zod.pipe.js';
 import type { Db } from '../db/client.js';
+import { ItemChangesService } from '../orders/item-changes.service.js';
+import { OrdersModule } from '../orders/orders.module.js';
 import { DB } from '../tokens.js';
+import { RestaurantInsightsController, RestaurantMenuController } from './menu.controller.js';
+import { RestaurantInsightsService } from './insights.service.js';
+import { RestaurantMenuService } from './menu.service.js';
 import { RestaurantOrdersService } from './restaurant-orders.service.js';
 
 @Controller('restaurant')
 export class RestaurantController {
-  constructor(@Inject(RestaurantOrdersService) private readonly service: RestaurantOrdersService) {}
+  constructor(
+    @Inject(RestaurantOrdersService) private readonly service: RestaurantOrdersService,
+    @Inject(ItemChangesService) private readonly itemChanges: ItemChangesService,
+  ) {}
+
+  /** RES-05: part of a line can't be made; the customer swaps or removes it. */
+  @Post('orders/:id/unavailable')
+  @HttpCode(204)
+  @RequirePermission('restaurant.orders.update')
+  async unavailable(
+    @CurrentAuth() auth: AuthContext,
+    @Param('id', UuidPipe) id: string,
+    @Body(new ZodPipe(markItemUnavailableSchema)) body: MarkItemUnavailableInput,
+  ) {
+    await this.itemChanges.markUnavailable(auth, id, body);
+  }
 
   @Get('board')
   @RequirePermission('restaurant.orders.view')
@@ -74,17 +96,28 @@ export class RestaurantController {
     @CurrentAuth() auth: AuthContext,
     @Body(new ZodPipe(storeStatusSchema)) body: z.infer<typeof storeStatusSchema>,
   ) {
-    await this.service.setOpen(auth, body.open);
+    await this.service.setOpen(auth, body.open, body.minutes);
   }
 }
 
 @Module({
-  controllers: [RestaurantController],
+  imports: [OrdersModule],
+  controllers: [RestaurantController, RestaurantMenuController, RestaurantInsightsController],
   providers: [
     {
       provide: RestaurantOrdersService,
       inject: [DB],
       useFactory: (db: Db) => new RestaurantOrdersService(db),
+    },
+    {
+      provide: RestaurantInsightsService,
+      inject: [DB],
+      useFactory: (db: Db) => new RestaurantInsightsService(db),
+    },
+    {
+      provide: RestaurantMenuService,
+      inject: [DB],
+      useFactory: (db: Db) => new RestaurantMenuService(db),
     },
   ],
 })

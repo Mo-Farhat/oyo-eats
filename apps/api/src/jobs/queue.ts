@@ -4,12 +4,19 @@ export interface JobQueue {
   define<T extends object>(queue: string, handler: (data: T) => Promise<void>): void;
   /** Runs the queue's handler with `data` after `seconds`. */
   sendAfter(queue: string, data: object, seconds: number): Promise<void>;
+  /** Runs the queue's handler on a cron schedule, Asia/Colombo time. Call from onModuleInit. */
+  schedule(queue: string, cron: string): void;
 }
 
 /** For tests and `jobs: false`: remembers what was scheduled and can run it on demand. */
 export class RecordingJobQueue implements JobQueue {
   readonly handlers = new Map<string, (data: object) => Promise<void>>();
   readonly sent: { queue: string; data: object; seconds: number }[] = [];
+  readonly schedules = new Map<string, string>();
+
+  schedule(queue: string, cron: string): void {
+    this.schedules.set(queue, cron);
+  }
 
   define<T extends object>(queue: string, handler: (data: T) => Promise<void>): void {
     this.handlers.set(queue, handler as (data: object) => Promise<void>);

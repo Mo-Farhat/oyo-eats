@@ -50,6 +50,8 @@ export interface ApiErrorBody {
   reasons?: string[];
   /** not_ready_to_go_live: what still has to be done. */
   blockers?: string[];
+  /** refund_over_cap: the dispatcher's limit. */
+  capCents?: number;
 }
 
 // Customer: catalog, addresses, orders
@@ -185,6 +187,8 @@ export interface OrderDetail extends OrderSummary {
   rateUntil: string | null;
   /** When the restaurant promised the food ready (accept time + prep time). */
   readyBy: string | null;
+  /** Items the restaurant couldn't make (RES-05); a pending one needs the customer's answer. */
+  itemChanges: ItemChange[];
 }
 
 export interface OrderRatings {
@@ -249,6 +253,29 @@ export interface SlipReviewItem {
 
 // Restaurant face (T01-T06)
 
+/** RES-05: part of an order the kitchen couldn't make, and what the customer chose. */
+export interface ItemChange {
+  id: string;
+  /** The order line it was raised on (gone once the line is removed). */
+  orderItemId: string | null;
+  /** The original line's item, as ordered. */
+  name: string;
+  quantity: number;
+  /** How many of it the kitchen can still make. */
+  availableQuantity: number;
+  /** What the missing part cost, modifiers included. */
+  missingCents: number;
+  substitute: { name: string; unitPriceCents: number; totalCents: number } | null;
+  status: 'pending' | 'substituted' | 'removed';
+  /** The customer; the timer when they didn't answer; the kitchen when there was no substitute. */
+  resolvedBy: 'customer' | 'timeout' | 'kitchen' | null;
+  /** Pending: when it is removed without an answer. */
+  respondBy: string;
+  /** Prepaid orders: what the office now owes the customer for this change. */
+  refundCents: number;
+  createdAt: string;
+}
+
 export interface RestaurantOrder {
   id: string;
   reference: string;
@@ -261,6 +288,8 @@ export interface RestaurantOrder {
   /** COD is collected by the rider; anything else is already paid. */
   paid: boolean;
   lines: {
+    /** The order line, for marking it unavailable (RES-05). */
+    id: string;
     menuItemId: string;
     name: string;
     quantity: number;
@@ -279,6 +308,8 @@ export interface RestaurantOrder {
   readyBy: string | null;
   readyAt: string | null;
   rider: { name: string; vehicle: string; plate: string } | null;
+  /** Unavailable items on this order; a pending one holds Ready until the customer answers. */
+  itemChanges: ItemChange[];
 }
 
 export interface RestaurantBoard {
@@ -458,6 +489,8 @@ export interface AdminOrderDetail extends OrderDetail {
   }[];
   canAdminCancel: boolean;
   canMarkFailed: boolean;
+  /** Paid less refunds so far (ADM-16). */
+  refundableCents: number;
 }
 
 /** A08: one row in the rider list. */
@@ -528,4 +561,293 @@ export interface SettlementDetail extends SettlementSummary {
   bankDetails: BankDetails | null;
   /** SHA-256 over the lines, fixed when paid. */
   checksum: string | null;
+}
+
+/** What a change request asks for, as shown side by side (ADM-12). */
+export interface MenuItemFields {
+  name: string;
+  description: string | null;
+  priceCents: number;
+  categoryName: string;
+}
+
+export interface MenuChangeRequest {
+  id: string;
+  kind: 'new_item' | 'edit';
+  menuItemId: string | null;
+  itemName: string;
+  /** Live values; null for a new item. */
+  before: MenuItemFields | null;
+  after: MenuItemFields;
+  /** New items: their choice groups, for the reviewer. */
+  groups: { name: string; required: boolean; options: string[] }[];
+  status: 'pending' | 'approved' | 'rejected';
+  adminNote: string | null;
+  restaurantId: string;
+  restaurantName: string;
+  createdAt: string;
+  reviewedAt: string | null;
+}
+
+/** T07: the restaurant's own menu, live and waiting items together. */
+export interface RestaurantMenuItem extends MenuItem {
+  categoryId: string;
+  /** live: on the customer menu; pending: a new item waiting; rejected: a new item turned down. */
+  status: 'live' | 'pending' | 'rejected';
+  /** A change waiting for approval on a live item. */
+  pendingChange: { requestId: string; after: MenuItemFields } | null;
+}
+
+export interface RestaurantMenu {
+  categories: { id: string; name: string; items: RestaurantMenuItem[] }[];
+  pendingRequests: number;
+}
+
+/** T10: hours, closures and the pause switch. */
+export interface RestaurantHours {
+  weekly: { weekday: number; opensAt: string; closesAt: string }[];
+  closures: {
+    id: string;
+    date: string;
+    closed: boolean;
+    opensAt: string | null;
+    closesAt: string | null;
+  }[];
+  /** Paused until then; far in the future means until reopened. */
+  pausedUntil: string | null;
+  isOpen: boolean;
+}
+
+/** NOT-06: one entry in the in-app notification list. */
+export interface InAppNotification {
+  id: string;
+  kind: string;
+  title: string;
+  body: string;
+  data: { orderId?: string; audience?: string };
+  createdAt: string;
+  read: boolean;
+}
+
+/** T11 (RES-11): what the restaurant is owed and its statements. */
+export interface RestaurantPayouts {
+  /** Delivered orders not yet on a statement. */
+  pending: { orderCount: number; amountCents: number; since: string | null };
+  statements: SettlementSummary[];
+}
+
+/** R10: the rider's pay, as fixed on each accepted offer. */
+export interface RiderEarnings {
+  today: { deliveries: number; payCents: number };
+  /** Monday to now, Asia/Colombo. */
+  week: { deliveries: number; payCents: number };
+  /** Pay earned but not yet paid out (ledger). */
+  owedCents: number;
+  recent: {
+    orderId: string;
+    reference: string;
+    restaurantName: string;
+    payCents: number;
+    deliveredAt: string;
+  }[];
+  payouts: SettlementSummary[];
+}
+
+export interface RefundRecord {
+  id: string;
+  amountCents: number;
+  reasonCode: string;
+  attribution: 'restaurant' | 'rider' | 'oyo';
+  note: string | null;
+  /** owed: to transfer to the customer; paid: transferred. */
+  status: 'owed' | 'paid';
+  issuedBy: string;
+  createdAt: string;
+  paidAt: string | null;
+}
+
+/** A22: one support case. */
+export interface SupportCase {
+  id: string;
+  type: string;
+  status: 'open' | 'in_progress' | 'resolved';
+  description: string | null;
+  reporter: { name: string; role: string; phone: string | null };
+  order: {
+    id: string;
+    reference: string;
+    restaurantName: string;
+    status: string;
+    paymentMethod: string;
+    totalCents: number;
+    /** What the customer actually paid (cash collected or transfer received). */
+    paidCents: number;
+    refundableCents: number;
+    riderId: string | null;
+  } | null;
+  /** Short-lived signed links. */
+  photos: string[];
+  location: { lat: number; lng: number } | null;
+  refunds: RefundRecord[];
+  resolution: string | null;
+  createdAt: string;
+  resolvedAt: string | null;
+}
+
+/** The customer's own cases on an order. */
+export interface MyCase {
+  id: string;
+  type: string;
+  status: 'open' | 'in_progress' | 'resolved';
+  resolution: string | null;
+  createdAt: string;
+  refunds: { amountCents: number; status: 'owed' | 'paid' }[];
+}
+
+/** T12 (RES-12): a review as the restaurant sees it. */
+export interface RestaurantReview {
+  id: string;
+  orderReference: string;
+  rating: number;
+  tags: string[];
+  body: string | null;
+  author: string;
+  reply: string | null;
+  hidden: boolean;
+  createdAt: string;
+}
+
+export interface RestaurantReviews {
+  rating: number | null;
+  count: number;
+  reviews: RestaurantReview[];
+}
+
+/** T12 (RES-13): orders and sales for a date range, by day (Asia/Colombo). */
+export interface RestaurantHistory {
+  from: string;
+  to: string;
+  days: { date: string; delivered: number; salesCents: number; cancelled: number }[];
+  totals: { delivered: number; salesCents: number; cancelled: number };
+  orders: {
+    id: string;
+    reference: string;
+    placedAt: string;
+    status: string;
+    paymentMethod: string;
+    itemCount: number;
+    /** Food value (what the restaurant is owed for it). */
+    salesCents: number;
+  }[];
+}
+
+/** A18 (ADM-15): a customer as the office sees them. */
+export interface AdminCustomerSummary {
+  id: string;
+  name: string;
+  phone: string | null;
+  orders: number;
+  lastOrderAt: string | null;
+  flagNote: string | null;
+  codBlocked: boolean;
+  blocked: boolean;
+}
+
+export interface AdminCustomerDetail extends AdminCustomerSummary {
+  joinedAt: string;
+  delivered: number;
+  cancelled: number;
+  refundedCents: number;
+  openCases: number;
+  recent: {
+    id: string;
+    reference: string;
+    restaurantName: string;
+    status: string;
+    paymentMethod: string;
+    totalCents: number;
+    placedAt: string;
+  }[];
+}
+
+/** A19 (ADM-17): one period's figures, Asia/Colombo dates. */
+export interface AdminReport {
+  from: string;
+  to: string;
+  orders: {
+    placed: number;
+    delivered: number;
+    cancelled: number;
+    rejected: number;
+    failed: number;
+    cod: number;
+    bankTransfer: number;
+  };
+  money: {
+    /** Delivered orders' totals. */
+    grossCents: number;
+    deliveryFeeCents: number;
+    foodCents: number;
+    riderPayCents: number;
+    refundsCents: number;
+  };
+  /** Now, from the ledger. */
+  position: {
+    cashWithRidersCents: number;
+    owedToRestaurantsCents: number;
+    owedToRidersCents: number;
+    owedToCustomersCents: number;
+  };
+  times: {
+    avgDeliveryMinutes: number | null;
+    p90DeliveryMinutes: number | null;
+    avgAcceptMinutes: number | null;
+  };
+  reasons: { reason: string; count: number }[];
+  days: { date: string; delivered: number; grossCents: number }[];
+  restaurants: {
+    id: string;
+    name: string;
+    delivered: number;
+    foodCents: number;
+    rejected: number;
+    rating: number | null;
+  }[];
+  riders: {
+    id: string;
+    name: string;
+    delivered: number;
+    avgMinutes: number | null;
+    declined: number;
+  }[];
+}
+
+export interface AuditEntry {
+  id: number;
+  at: string;
+  actor: string;
+  role: string;
+  action: string;
+  target: string;
+  details: Record<string, unknown> | null;
+}
+
+/** PRD section 9, control 2: one run of the books check. */
+export interface ReconciliationRun {
+  id: string;
+  forDate: string;
+  ok: boolean;
+  issues: { check: string; message: string; ref: string | null }[];
+  triggeredBy: string | null;
+  createdAt: string;
+}
+
+/** R13: the rider's own details. Vehicle and plate are set by the office. */
+export interface RiderProfile {
+  name: string;
+  username: string | null;
+  phone: string | null;
+  vehicle: string;
+  plate: string;
+  emergencyContact: { name: string; phone: string } | null;
 }

@@ -182,3 +182,57 @@ export async function balance(tx: Tx, account: LedgerAccount, partyId?: string):
     );
   return Number(row?.cents ?? 0);
 }
+
+const ATTRIBUTION_ACCOUNT = {
+  restaurant: 'restaurant_payable',
+  rider: 'rider_payable',
+  oyo: 'refund_expense',
+} as const;
+
+/**
+ * A refund on a delivered order: now owed to the customer, charged to whoever bears it (the
+ * restaurant's or rider's payable shrinks, or Oyo Eats takes the expense).
+ */
+export async function postRefundIssued(
+  tx: Tx,
+  r: {
+    id: string;
+    orderId: string;
+    customerId: string;
+    tenantId: string;
+    riderId: string | null;
+    amountCents: number;
+    attribution: 'restaurant' | 'rider' | 'oyo';
+    actorId: string;
+  },
+) {
+  const partyId =
+    r.attribution === 'restaurant' ? r.tenantId : r.attribution === 'rider' ? r.riderId : null;
+  await post(tx, {
+    kind: 'refund_issued',
+    orderId: r.orderId,
+    memo: `refund ${r.id}`,
+    createdBy: r.actorId,
+    entries: [
+      { account: ATTRIBUTION_ACCOUNT[r.attribution], partyId, amountCents: r.amountCents },
+      { account: 'customer_credit', partyId: r.customerId, amountCents: -r.amountCents },
+    ],
+  });
+}
+
+/** The office has transferred a refund to the customer. */
+export async function postRefundPaid(
+  tx: Tx,
+  r: { id: string; orderId: string; customerId: string; amountCents: number; actorId: string },
+) {
+  await post(tx, {
+    kind: 'refund_paid',
+    orderId: r.orderId,
+    memo: `refund ${r.id}`,
+    createdBy: r.actorId,
+    entries: [
+      { account: 'customer_credit', partyId: r.customerId, amountCents: r.amountCents },
+      { account: 'business_bank', amountCents: -r.amountCents },
+    ],
+  });
+}

@@ -282,6 +282,13 @@ describe.skipIf(!testDatabaseUrl)('cancelling a paid bank transfer', () => {
         await h.upload(`/orders/${order.id}/slip`, token, 'slip', await slipImage(9));
         const cancelled = await h.http('POST', `/orders/${order.id}/cancel`, { token });
         expect(cancelled.body.status).toBe('cancelled');
+        // The slip leaves the review queue: it's a refund case now.
+        const dispatcher = await h.staff('dispatcher');
+        expect(
+          (await h.http('GET', '/admin/slips', { token: dispatcher })).body.map(
+            (x: { orderId: string }) => x.orderId,
+          ),
+        ).not.toContain(order.id);
         const cases = (
           await tx.execute<{ type: string }>(
             sql`select type from support_cases where order_id = ${order.id}`,

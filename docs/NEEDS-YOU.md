@@ -25,7 +25,7 @@ The design canvas copy and numbers are placeholders too. Where the design and th
 Step-by-step instructions for every account below: [SETUP-PROVIDERS.md](SETUP-PROVIDERS.md).
 
 - [ ] **Apple Developer and Google Play organisation accounts.** Both need a D-U-N-S number (1–2 weeks). Needed before the first store build. 
-- [ ] **Google Cloud project with Maps SDK (Android, iOS) and Routes API keys** (NFR-14). Coming. Server key → `GOOGLE_ROUTES_API_KEY` in `apps/api/.env`; app keys → `apps/mobile/.env` (see `apps/mobile/.env.example`). Until then: a grey map panel and straight-line distance x 1.3 for fees.
+- [ ] **Google Cloud project with Maps SDK (Android, iOS) and Routes API keys** (NFR-14). Maps app keys are in; **billing must be turned on in Google Cloud** (owner's card, budget alert) before the Routes API or the in-app maps answer, so maps work waits on that. Server key → `GOOGLE_ROUTES_API_KEY` in `apps/api/.env`; app keys → `apps/mobile/.env` (see `apps/mobile/.env.example`). Until then: a grey map panel and straight-line distance x 1.3 for fees.
 - [ ] **SMS provider** (Notify.lk, Text.lk or Dialog, plus a fallback). Codes print in the API log in development; production refuses to start without one.
 - [ ] **Card gateway account** (iPay), for Milestone 6.
 - [ ] **Render, Neon (production project) and Cloudflare accounts**, when we deploy.
@@ -43,12 +43,15 @@ Step-by-step instructions for every account below: [SETUP-PROVIDERS.md](SETUP-PR
 - **Demo accounts** (one per face) from the seed; they'll double as store-review accounts.
 - **Brand illustration**: grey panel with a scooter icon on S02.
 - **New-order alarm sound**: a generated two-tone chime (`apps/mobile/assets/sounds/new-order.wav`). Swap in a proper alarm sound.
+- **Push notifications**: built. Firebase is set up (`google-services.json` in `apps/mobile/`). Still needed: link the Expo project (`cd apps/mobile && npx eas-cli login && npx eas-cli init`), upload the Firebase private key to EAS (SETUP-PROVIDERS step 6), and the Apple push key once the Apple account exists. Until then pushes are logged by the API and show in the app's notification list.
 - **Maps**: grey map panel instead of Google Maps in the app. Road distance uses the Routes API once `GOOGLE_ROUTES_API_KEY` is set (adapter built); straight-line x 1.3 until then.
+- **SMS costs**: besides sign-in codes, SMS now also goes out for critical notifications that can't be pushed (new order, job offer, rider assigned, late order, emergency) and to a rider's emergency contact. Budget a few SMS per day per restaurant until everyone has the app with notifications on.
 - **SMS**: console sender in development; the Notify.lk adapter is built and switches on when its keys are set.
 - **File storage**: local disk (`apps/api/.uploads`, git-ignored) in development; the Cloudflare R2 adapter is built and switches on when its keys are set.
 - **Malware scanning of uploads** (SEC-25): images are fully re-encoded, which neutralises hidden content; a scanner is still needed for any non-image upload (PDF slips, rider documents) before those are accepted.
 - **Terms and privacy links**: plain text, no URLs yet.
-- **Test data** in the dev database: customers +94770000001, +94770000002, +94775550101 and a few random +9477… numbers from browser test runs (each with one cancelled or delivered order at Hill Top; some were deleted by the account-deletion test, leaving anonymous "Customer" reviews on Hill Top), `preview.dispatch` and `preview.rider` (test logins; credentials only in a scratch file), `preview.kitchen` (a Hill Top staff login for testing; its temporary password is only in a scratch file), a few Hill Top orders left in Ready from kitchen tests, and `preview.dispatcher` (can't sign in again; switch it off from the People tab), `preview.owner` (owner test login for the admin screens; same credentials as `preview.dispatch`, scratch file only), and a suspended "Riverside Rice 0513" restaurant from the onboarding walkthrough. Wipe the dev database before the pilot.
+- **Rehearsal**: `docs/REHEARSAL.md`. Demo restaurants are set to open all day by `demo:setup`; real hours come back with the real restaurants.
+- **Test data** in the dev database: order #KSC7YT at Hill Top (accepted, with an open cancel request and a cold-food case), `p2.owner.*` and `p2.kitchen.*` (owner and Hill Top owner logins for browser checks; credentials only in a session scratch file), Hill Top's Chicken Cheese Kottu at LKR 1,450 after an approval test (the design had 1,350). Earlier ones: customers +94770000001, +94770000002, +94775550101 and a few random +9477… numbers from browser test runs (each with one cancelled or delivered order at Hill Top; some were deleted by the account-deletion test, leaving anonymous "Customer" reviews on Hill Top), `preview.dispatch`, `preview.rider` and `preview.owner` (test logins; their credentials went with a cleared temp folder, so switch them off), `preview.kitchen` (same: switch it off), a few Hill Top orders left in Ready from kitchen tests, and `preview.dispatcher` (can't sign in again; switch it off from the People tab), `preview.owner` (owner test login for the admin screens; same credentials as `preview.dispatch`, scratch file only), and a suspended "Riverside Rice 0513" restaurant from the onboarding walkthrough. Wipe the dev database before the pilot.
 
 ## Design vs PRD (resolved by following the PRD, for the next design pass)
 
@@ -58,6 +61,10 @@ Step-by-step instructions for every account below: [SETUP-PROVIDERS.md](SETUP-PR
 - C06: the order-level "note to restaurant" isn't built yet; per-item kitchen notes are.
 - C07: card payment is hidden until Milestone 6.
 - A01: "Attention" is a banner for late orders, not a separate tab. Tapping an order's top half opens A02.
+- T08: no photo upload yet, and choice groups on a live item are read-only ("call the office"); both follow. The design's free category dropdown is a row of category chips.
+- T10: one time range per day (the design shows the same); split shifts can be set by the owner on A14.
+- A22 refunds: the PRD allows refunds as credit or bank transfer; only bank transfer (by the office) is built, since in-app credit at checkout doesn't exist yet. On a cancelled bank-transfer order refunded only in part, the kept part stays recorded as owed to the customer until reconciliation is built.
+- RID-14: the emergency button alerts dispatch with the rider's location; the rider's stored emergency contact isn't messaged yet.
 - A12: the design has no outright "Reject"; built as Approve, Ask for a New Slip, and Reject Payment (cancels the order) for fake or unpaid slips.
 - R02: earnings stats ("[RATE]" in the design) wait for rider pay rates; the map is the grey placeholder.
 - T01: "Busy mode" (adds 15 min to customer times) isn't in the PRD and isn't built; the Open switch is.
